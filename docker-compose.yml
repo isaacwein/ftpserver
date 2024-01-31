@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  ftpserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hub.deploy.telebroad.com/ftpserver:latest
+    ports:
+      - "21:21"
+    volumes:
+      - ./static:/static # host:container
+    environment:
+      - SERVER_ROOT=/static
+    container_name: ftpserver
