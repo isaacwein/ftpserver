@@ -6,6 +6,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 COPY ./server ./server
+COPY ./users ./users
 COPY main.go .
 COPY go.mod .
 

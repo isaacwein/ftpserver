@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/telebroad/ftpserver/server"
+	"github.com/telebroad/ftpserver/users"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,8 +19,12 @@ func main() {
 		// Set a default port if the environment variable is not set
 		ftpServerRoot = "/static"
 	}
+	Users := users.NewLocalUsers()
+	user1 := Users.Add("user", "password", 1)
+	user1.AddIP("127.0.0.1")
+	user1.AddIP("::1")
 
-	ftpServer := server.NewFTPServer("21", server.NewFtpLocalFS(ftpServerRoot))
+	ftpServer := server.NewFTPServer(ftpPort, server.NewFtpLocalFS(ftpServerRoot, "/"), Users)
 	ftpServer.Start()
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(
