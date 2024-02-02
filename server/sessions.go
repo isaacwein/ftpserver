@@ -8,11 +8,12 @@ import (
 
 // Session represents an individual client FTP session.
 type Session struct {
-	conn            net.Conn    // The connection to the client
-	userInfo        *users.User // Authenticated user
-	workingDir      string      // Current working directory
-	root            string      // directory on the server acts as the root
-	isAuthenticated bool        // Authentication status
+	conn            net.Conn     // The connection to the client
+	userInfo        *users.User  // Authenticated user
+	workingDir      string       // Current working directory
+	root            string       // directory on the server acts as the root
+	isAuthenticated bool         // Authentication status
+	dataListener    net.Listener // data transfer connection
 }
 
 // SessionManager manages all active sessions.

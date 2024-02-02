@@ -4,6 +4,14 @@ import (
 	"fmt"
 	"github.com/telebroad/ftpserver/users"
 	"net"
+	"net/netip"
+)
+
+type FTPServerTransferType string
+
+const (
+	typeA FTPServerTransferType = "A"
+	typeI FTPServerTransferType = "I"
 )
 
 type FTPServer struct {
@@ -15,9 +23,18 @@ type FTPServer struct {
 	sessionManager *SessionManager
 	users          users.Users
 	WelcomeMessage string
+	PublicServerIP [4]byte
+	Type           FTPServerTransferType
 }
 
-func NewFTPServer(addr string, fs FtpFS, users users.Users) *FTPServer {
+func NewFTPServer(addr, PublicServerIP string, fs FtpFS, users users.Users) (*FTPServer, error) {
+	ip, err := netip.ParseAddr(PublicServerIP)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing PublicServerIP: %w", err)
+	}
+	if !ip.Is4() {
+		return nil, fmt.Errorf("PublicServerIP must be an IPv4 address got: %v", PublicServerIP)
+	}
 
 	return &FTPServer{
 		addr:           addr,
@@ -25,7 +42,8 @@ func NewFTPServer(addr string, fs FtpFS, users users.Users) *FTPServer {
 		sessionManager: NewSessionManager(),
 		users:          users,
 		WelcomeMessage: "Welcome to My FTP Server",
-	}
+		PublicServerIP: ip.As4(),
+	}, nil
 }
 
 func (s *FTPServer) Start() error {
@@ -37,7 +55,7 @@ func (s *FTPServer) Start() error {
 		return fmt.Errorf("error starting server: %w", err)
 	}
 	// Accept connections in a new goroutine
-	fmt.Printf("starting listener on %#+v\n", s.listener)
+	fmt.Printf("starting listener on %#+v\n", s.addr)
 	go s.Run()
 	return nil
 }

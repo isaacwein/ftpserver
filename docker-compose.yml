@@ -11,5 +11,6 @@ services:
     volumes:
       - ./static:/static # host:container
     environment:
-      - SERVER_ROOT=/static
+      - FTP_SERVER_ROOT=/static
+      - FTP_SERVER_IPV4=127.0.0.1
     container_name: ftpserver

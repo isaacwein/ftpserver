@@ -12,7 +12,7 @@ COPY go.mod .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o ftpserver
 
-ENV SERVER_ROOT=/static
-ENV FTP_SERVER_ROOT=:21
-
+ENV FTP_SERVER_ROOT=/static
+ENV FTP_SERVER_IPV4=127.0.0.1
+ENV FTP_SERVER_PORT=:21
 ENTRYPOINT ["./ftpserver"]
