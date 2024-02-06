@@ -8,9 +8,12 @@ services:
     image: hub.deploy.telebroad.com/ftpserver:latest
     ports:
       - "21:21"
+      - "30000-30099:30000-30099"
     volumes:
       - ./static:/static # host:container
     environment:
-      - FTP_SERVER_ROOT=/static
-      - FTP_SERVER_IPV4=127.0.0.1
+      FTP_SERVER_ROOT: /static
+      FTP_SERVER_IPV4: 127.0.0.1
+      PASV_MIN_PORT: 30000
+      PASV_MAX_PORT: 30009
     container_name: ftpserver

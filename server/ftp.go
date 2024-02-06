@@ -20,14 +20,16 @@ type FTPServer struct {
 	supportsTLS    bool
 	fs             FtpFS
 	root           string
-	sessionManager *SessionManager
+	sessionManager *FTPSessionManager
 	users          users.Users
 	WelcomeMessage string
 	PublicServerIP [4]byte
 	Type           FTPServerTransferType
+	pasvMaxPort    int
+	pasvMinPort    int
 }
 
-func NewFTPServer(addr, PublicServerIP string, fs FtpFS, users users.Users) (*FTPServer, error) {
+func NewFTPServer(addr, PublicServerIP string, fs FtpFS, users users.Users, pasvMinPort, pasvMaxPort int) (*FTPServer, error) {
 	ip, err := netip.ParseAddr(PublicServerIP)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing PublicServerIP: %w", err)
@@ -43,6 +45,8 @@ func NewFTPServer(addr, PublicServerIP string, fs FtpFS, users users.Users) (*FT
 		users:          users,
 		WelcomeMessage: "Welcome to My FTP Server",
 		PublicServerIP: ip.As4(),
+		pasvMaxPort:    pasvMaxPort,
+		pasvMinPort:    pasvMinPort,
 	}, nil
 }
 

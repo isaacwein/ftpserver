@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
@@ -42,12 +43,36 @@ func main() {
 		// Set a default port if the environment variable is not set
 		ftpServerRoot = "/static"
 	}
+
+	pasvMinPort := os.Getenv("PASV_MIN_PORT")
+	if pasvMinPort == "" {
+		// Set a default port if the environment variable is not set
+		fmt.Println("PASV_MIN_PORT was empty so setting it to 30000")
+		pasvMinPort = "30000"
+	}
+	pasvMaxPort := os.Getenv("PASV_MAX_PORT")
+	if pasvMaxPort == "" {
+		fmt.Println("PASV_MAX_PORT was empty so setting it to 30009")
+		// Set a default port if the environment variable is not set
+		pasvMaxPort = "30009"
+	}
+	// convert to int
+	pasvMinPortP, err := strconv.Atoi(pasvMinPort)
+	if err != nil {
+		fmt.Println("Error converting PASV_MIN_PORT  to int", "error", err)
+		return
+	}
+	pasvMaxPortP, err := strconv.Atoi(pasvMaxPort)
+	if err != nil {
+		fmt.Println("Error converting PASV_MAX_PORT to int", "error", err)
+		return
+	}
 	Users := users.NewLocalUsers()
 	user1 := Users.Add("user", "password", 1)
 	user1.AddIP("127.0.0.1")
 	user1.AddIP("::1")
 
-	ftpServer, err := server.NewFTPServer(ftpPort, ftpServerIPv4, server.NewFtpLocalFS(ftpServerRoot, "/"), Users)
+	ftpServer, err := server.NewFTPServer(ftpPort, ftpServerIPv4, server.NewFtpLocalFS(ftpServerRoot, "/"), Users, pasvMinPortP, pasvMaxPortP)
 	if err != nil {
 		fmt.Println("Error starting ftp server", "error", err)
 		return
