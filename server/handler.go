@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func handleConnection(conn net.Conn, manager *FTPSessionManager) {
@@ -127,20 +128,26 @@ func (s *FTPServer) handleConnection(conn net.Conn) {
 			ftpSession.TypeCommand(arg)
 
 		case "PASV":
-			ftpSession.PASVCommand(arg)
+			ftpSession.PasvCommand(arg)
 
 		case "EPSV":
-			ftpSession.EPSVCommand(arg)
+			ftpSession.EpsvCommand(arg)
 
 		case "LIST":
 		case "MLSD": // MLSD is LIST with machine-readable format like $ls -l
 			ftpSession.MLSDCommand(arg)
+		case "MLST":
+			ftpSession.MLSTCommand(arg)
+		case "SIZE":
 
 		case "STOR":
 
 			ftpSession.StorCommand(arg)
+		case "MDTM":
+			ftpSession.ModifyTimeCommand(arg)
+
 		case "RETR":
-			fmt.Fprintln(logWriter, "150 Opening data connection.")
+			ftpSession.RetrieveCommand(arg)
 		case "QUIT":
 			fmt.Fprintln(logWriter, "221 Goodbye.")
 			return
@@ -234,10 +241,14 @@ func (s *FTPSession) FeaturesCommand() string {
 	return strings.Join(f, "\n")
 }
 
+// PrintWorkingDirectoryCommand handles the PWD command from the client.
+// The PWD command is used to print the current working directory on the server.
 func (s *FTPSession) PrintWorkingDirectoryCommand() string {
 	return fmt.Sprintf("257 \"%s\" is current directory", s.workingDir)
 }
 
+// ChangeDirectoryCommand handles the CWD command from the client.
+// The CWD command is used to change the working directory on the server.
 func (s *FTPSession) ChangeDirectoryCommand(arg string) (res string, err error) {
 	// Resolve the requested directory to an absolute path
 	requestedDir := ""
@@ -246,7 +257,7 @@ func (s *FTPSession) ChangeDirectoryCommand(arg string) (res string, err error) 
 	} else {
 		requestedDir = filepath.Join(s.workingDir, arg)
 	}
-
+	fmt.Println("filepath.IsAbs(arg)", filepath.IsAbs(arg), requestedDir)
 	//requestedDir = filepath.Clean(requestedDir)
 	// if after the request is joined with the absolute path, the result is ".." then return an error
 	if strings.HasPrefix(requestedDir, "..") {
@@ -263,6 +274,8 @@ func (s *FTPSession) ChangeDirectoryCommand(arg string) (res string, err error) 
 	return fmt.Sprintf("250 Directory successfully changed to \"%s\"", requestedDir), nil
 }
 
+// OptsCommand handles the OPTS command from the client.
+// The OPTS command is used to specify options for the server.
 func (s *FTPSession) OptsCommand(arg string) {
 	switch arg {
 	case "UTF8 ON":
@@ -272,6 +285,24 @@ func (s *FTPSession) OptsCommand(arg string) {
 		fmt.Fprintln(s.writer, "500 Unknown option.")
 	}
 }
+
+// TypeCommand handles the TYPE command from the client.
+// The TYPE command is used to specify the type of file being transferred.
+// The two types are ASCII (A) and binary (I).
+func (s *FTPSession) TypeCommand(arg string) {
+	if arg == "I" {
+		s.ftpServer.Type = typeI
+		fmt.Fprintln(s.writer, "200 Type set to I")
+	} else if arg == "A" {
+		s.ftpServer.Type = typeA
+		fmt.Fprintln(s.writer, "200 Type set to A")
+	} else {
+		fmt.Fprintln(s.writer, "500 Unknown type")
+	}
+}
+
+// findAvailablePortInRange finds an available port in the given range.
+// It returns a listener on the available port and the port number.
 func findAvailablePortInRange(start, end int) (net.Listener, int, error) {
 	for port := start; port <= end; port++ {
 		address := fmt.Sprintf(":%d", port)
@@ -283,8 +314,10 @@ func findAvailablePortInRange(start, end int) (net.Listener, int, error) {
 	return nil, 0, fmt.Errorf("no available ports found in range %d-%d", start, end)
 }
 
-// PAEPSVCommand handles the PASV command from the client.
-func (s *FTPSession) PAEPSVCommand(arg string) (port int, err error) {
+// PasvEpsvCommand handles the PASV command from the client.
+// The PASV command is used to enter passive mode.
+func (s *FTPSession) PasvEpsvCommand(arg string) (port int, err error) {
+
 	dataListener, port, err := findAvailablePortInRange(s.ftpServer.pasvMinPort, s.ftpServer.pasvMaxPort)
 	if err != nil {
 		err = fmt.Errorf("500: Server error listening for data connection: %w", err)
@@ -309,8 +342,10 @@ func (s *FTPSession) PAEPSVCommand(arg string) (port int, err error) {
 	return port, nil
 }
 
-func (s *FTPSession) PASVCommand(arg string) error {
-	port, err := s.PAEPSVCommand(arg)
+// PasvCommand handles the PASV command from the client.
+// The PASV command is used to enter passive mode.
+func (s *FTPSession) PasvCommand(arg string) error {
+	port, err := s.PasvEpsvCommand(arg)
 	if err != nil {
 		return err
 	}
@@ -321,9 +356,12 @@ func (s *FTPSession) PASVCommand(arg string) error {
 	fmt.Fprintln(s.writer, resp)
 	return nil
 }
-func (s *FTPSession) EPSVCommand(arg string) error {
+
+// EpsvCommand handles the EPSV command from the client.
+// The EPSV command is used to enter extended passive mode.
+func (s *FTPSession) EpsvCommand(arg string) error {
 	// Listen on a new port
-	port, err := s.PAEPSVCommand(arg)
+	port, err := s.PasvEpsvCommand(arg)
 	if err != nil {
 		return err
 	}
@@ -336,7 +374,9 @@ func (s *FTPSession) EPSVCommand(arg string) error {
 
 }
 
-func (s *FTPSession) StorCommand(arg string) (string, error) {
+// StorCommand handles the STOR command from the client.
+// The STOR command is used to store a file on the server.
+func (s *FTPSession) StorCommand(arg string) {
 	// Close the data connection
 	defer s.dataListener.Close()
 	// At this point, dataConn is ready for use for data transfer
@@ -345,15 +385,48 @@ func (s *FTPSession) StorCommand(arg string) (string, error) {
 	// Wait for the client to connect on this new port
 	dataConn, err := s.dataListener.Accept()
 	if err != nil {
-		return "", fmt.Errorf("425 Can't open data connection: %w", err)
+		fmt.Fprintf(s.writer, "425 Can't open data connection: %s\n", err)
+		return
 	}
+	defer dataConn.Close()
 	err = s.ftpServer.fs.Create(arg, dataConn, string(s.ftpServer.Type))
 	if err != nil {
-		return "", fmt.Errorf("550 Error writing to the file: %w", err)
+		fmt.Fprintln(s.writer, "550 Error writing to the file:", err)
+		return
 	}
-	return "226 Transfer complete", nil
+	fmt.Fprintln(s.writer, "226 Transfer complete")
+
 }
 
+// ModifyTimeCommand handles the MDTM command from the client.
+// The MDTM command is used to modify the modification time of a file on the server.
+func (s *FTPSession) ModifyTimeCommand(arg string) {
+	args := strings.SplitN(arg, " ", 2)
+	if len(args) == 0 {
+		fmt.Fprintln(s.writer, "501 No file name given")
+		return
+	} else if len(args) == 1 {
+		stat, err := s.ftpServer.fs.Stat(args[0])
+		if err != nil {
+			fmt.Fprintln(s.writer, "501 Error getting file info:", err)
+			return
+		}
+		fmt.Fprintln(s.writer, "213", stat)
+	} else if len(args) == 2 {
+		newTime, err := time.Parse("20060102150405", args[0])
+		if err != nil {
+			fmt.Fprintln(s.writer, "501 Invalid time format got:", args[0], "expected: YYYYMMDDHHMMSS")
+			return
+		}
+		err = s.ftpServer.fs.ModifyTime(args[1], newTime)
+		if err != nil {
+			fmt.Fprintln(s.writer, "501 Error setting file modification time:", err, "for file:", args[0])
+			return
+		}
+		fmt.Fprintln(s.writer, "213", "File modification time set to:", newTime.Format("20060102150405"))
+	}
+
+}
 func (s *FTPSession) CloseDataConnection() {
 	// Close the data connection
 	if s.dataListener != nil {
@@ -361,17 +434,20 @@ func (s *FTPSession) CloseDataConnection() {
 	}
 }
 
+// MLSDCommand handles the MLSD command from the client.
+// The MLSD command is used to list the contents of a directory in a machine-readable format.
 func (s *FTPSession) MLSDCommand(arg string) {
 	// Close the data connection
-	defer s.dataListener.Close()
 
 	fmt.Fprintln(s.writer, "150 Here comes the directory listing.")
 	dataConn, err := s.dataListener.Accept()
+
 	if err != nil {
 		fmt.Fprintf(s.writer, "425 Can't open data connection: %s\n", err)
 	}
+
 	// Send the directory listing
-	entries, err := s.ftpServer.fs.Dir("/")
+	entries, err := s.ftpServer.fs.Dir(s.workingDir)
 	if err != nil {
 		fmt.Fprintln(s.writer, "550 Error getting directory listing.", err.Error())
 		return
@@ -381,18 +457,40 @@ func (s *FTPSession) MLSDCommand(arg string) {
 		fmt.Println("dataConn:", entry)
 		fmt.Fprintln(dataConn, entry)
 	}
-
+	dataConn.Close()
+	s.dataListener.Close()
 	fmt.Fprintln(s.writer, "226 Directory send OK.")
 }
-
-func (s *FTPSession) TypeCommand(arg string) {
-	if arg == "I" {
-		s.ftpServer.Type = typeI
-		fmt.Fprintln(s.writer, "200 Type set to I")
-	} else if arg == "A" {
-		s.ftpServer.Type = typeA
-		fmt.Fprintln(s.writer, "200 Type set to A")
-	} else {
-		fmt.Fprintln(s.writer, "500 Unknown type")
+func (s *FTPSession) MLSTCommand(arg string) {
+	filename := filepath.Join(s.workingDir, arg)
+	entries, err := s.ftpServer.fs.Stat(filename)
+	if err != nil {
+		fmt.Fprintln(s.writer, "550 Error getting file info:", err)
+		return
 	}
+	fmt.Fprintln(s.writer, "250-File details:")
+	fmt.Fprintln(s.writer, entries)
+	fmt.Fprintln(s.writer, "250 End")
+}
+func (s *FTPSession) RetrieveCommand(arg string) {
+
+	// Close the data connection
+	defer s.dataListener.Close()
+	// At this point, dataConn is ready for use for data transfer
+	// You can now send or receive data over dataConn
+	fmt.Fprintln(s.writer, "150 Opening data connection.")
+	// Wait for the client to connect on this new port
+	dataConn, err := s.dataListener.Accept()
+	if err != nil {
+		fmt.Fprintf(s.writer, "425 Can't open data connection: %s\n", err)
+	}
+	filename := filepath.Join(s.workingDir, arg)
+	fmt.Println("filename:", filename)
+	_, err = s.ftpServer.fs.Read(filename, dataConn)
+	if err != nil {
+		fmt.Fprintf(s.writer, "550 Error reading the file: %s\n", err)
+	}
+	dataConn.Close()
+	s.dataListener.Close()
+	fmt.Fprintln(s.writer, "226 Transfer complete")
 }
