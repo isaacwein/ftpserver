@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+
 	// this is the bublic ip of the server FOR PASV mode
 	ftpServerIPv4 := os.Getenv("FTP_SERVER_IPV4")
 	if ftpServerIPv4 == "" {

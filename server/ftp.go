@@ -43,6 +43,7 @@ func NewFTPServer(addr, PublicServerIP string, fs FtpFS, users users.Users, pasv
 		fs:             fs,
 		sessionManager: NewSessionManager(),
 		users:          users,
+		root:           fs.RootDir(),
 		WelcomeMessage: "Welcome to My FTP Server",
 		PublicServerIP: ip.As4(),
 		pasvMaxPort:    pasvMaxPort,
@@ -63,6 +64,7 @@ func (s *FTPServer) Start() error {
 	go s.Run()
 	return nil
 }
+
 func (s *FTPServer) Stop() error {
 	fmt.Println("Stopping FTP server...")
 	if s.listener == nil {
