@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"syscall"
 )
 
 func main() {
@@ -80,16 +79,17 @@ func main() {
 	}
 	ftpServer.Start()
 	stopChan := make(chan os.Signal, 1)
-	signal.Notify(
-		stopChan,
-		syscall.SIGHUP,  // (0x1) Terminal hangup
-		syscall.SIGINT,  // (0x2) Interrupt from keyboard (Ctrl+C)
-		syscall.SIGQUIT, // (0x3) Quit from keyboard
-		syscall.SIGABRT, // (0x6) Aborted (core dumped)
-		syscall.SIGKILL, // (0x9) Killed (cannot be caught)
-		syscall.SIGTERM, // (0xf) Terminated (generic termination signal)
-	)
+	signal.Notify(stopChan, os.Interrupt)
 
 	<-stopChan
 	ftpServer.Stop()
+
+	// testing only
+	m := http.NewServeMux()
+
+	m.HandleFunc("/api/transcribe", func(w http.ResponseWriter, r *http.Request) {
+		r.GetBody()
+		fmt.Fprint(w, "Hello, world!")
+	})
+	http.ListenAndServe(":8080", m)
 }

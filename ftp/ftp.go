@@ -7,7 +7,7 @@
 package ftp
 
 // StatusCode is a type for FTP status codes
-type StatusCode int
+type StatusCode = int
 
 const (
 	// Informational codes (1xx)
@@ -42,15 +42,15 @@ const (
 	StatusNeedAccountForLogin              StatusCode = 332 // Need account for login
 	StatusFileActionPending                StatusCode = 350 // Requested file action pending further information
 	// Transient Negative Completion codes (4xx)
-	StatusServiceNotAvailable             StatusCode = 421
-	StatusCantOpenDataConnection          StatusCode = 425
-	StatusConnectionClosedTransferAborted StatusCode = 426
-	StatusInvalidUsernameOrPassword       StatusCode = 430
-	StatusNeedResourceToProcessSecurity   StatusCode = 431
-	StatusRequestedHostUnavailable        StatusCode = 434
-	StatusRequestedFileActionNotTaken     StatusCode = 450
-	StatusLocalProcessingError            StatusCode = 451
-	StatusInsufficientStorage             StatusCode = 452
+	StatusServiceNotAvailable             StatusCode = 421 // Service not available, closing control connection
+	StatusCantOpenDataConnection          StatusCode = 425 // Can't open data connection
+	StatusConnectionClosedTransferAborted StatusCode = 426 // Connection closed; transfer aborted
+	StatusInvalidUsernameOrPassword       StatusCode = 430 // Invalid username or password
+	StatusNeedResourceToProcessSecurity   StatusCode = 431 // Need account for storing files
+	StatusRequestedHostUnavailable        StatusCode = 434 // Requested host unavailable
+	StatusRequestedFileActionNotTaken     StatusCode = 450 // Requested file action not taken
+	StatusLocalProcessingError            StatusCode = 451 // Requested action aborted: local error in processing
+	StatusInsufficientStorage             StatusCode = 452 // Requested action not taken; insufficient storage space
 	// Permanent Negative Completion codes (5xx)
 	StatusSyntaxError                   StatusCode = 500 // Syntax error, command unrecognized
 	StatusSyntaxErrorInParameters       StatusCode = 501 // Syntax error in parameters or arguments
@@ -64,19 +64,81 @@ const (
 	StatusExceededStorageAllocation     StatusCode = 552 // Requested file action aborted; exceeded storage allocation
 	StatusFileNameNotAllowed            StatusCode = 553 // Requested action not taken; file name not allowed
 	// Protected reply codes (6xx)
-	StatusIntegrityProtected                StatusCode = 631
-	StatusConfidentialityIntegrityProtected StatusCode = 632
-	StatusConfidentialityProtected          StatusCode = 633
+	StatusIntegrityProtected                StatusCode = 631 // Integrity protected reply
+	StatusConfidentialityIntegrityProtected StatusCode = 632 // Confidentiality and integrity protected reply
+	StatusConfidentialityProtected          StatusCode = 633 // Confidentiality protected reply
 
-	WinsockConnectionResetByPeer StatusCode = 10054
-	WinsockCannotConnect         StatusCode = 10060
-	WinsockConnectionRefused     StatusCode = 10061
-	WinsockNoRouteToHost         StatusCode = 10065
-	WinsockDirectoryNotEmpty     StatusCode = 10066
-	WinsockTooManyUsers          StatusCode = 10068
+	WinsockConnectionResetByPeer StatusCode = 10054 // Connection reset by peer
+	WinsockCannotConnect         StatusCode = 10060 // Cannot connect to remote server
+	WinsockConnectionRefused     StatusCode = 10061 // Connection refused
+	WinsockNoRouteToHost         StatusCode = 10065 // No route to host
+	WinsockDirectoryNotEmpty     StatusCode = 10066 // Directory not empty
+	WinsockTooManyUsers          StatusCode = 10068 // Too many users
 )
 
-type Command string
+var statusText = map[StatusCode]string{
+	110:   "StatusRestartMarkerReply",
+	120:   "StatusServiceReadyInMinutes",
+	125:   "StatusDataConnectionAlreadyOpen",
+	150:   "StatusFileStatusOK",
+	200:   "StatusCommandOK",
+	202:   "StatusCommandNotImplemented",
+	211:   "StatusSystemStatus",
+	212:   "StatusDirectoryStatus",
+	213:   "StatusFileStatus",
+	214:   "StatusHelpMessage",
+	215:   "StatusNameSystemType",
+	220:   "StatusServiceReadyForNewUser",
+	221:   "StatusServiceClosingControlConnection",
+	225:   "StatusDataConnectionOpen",
+	226:   "StatusClosingDataConnection",
+	227:   "StatusEnteringPassiveMode",
+	228:   "StatusEnteringLongPassiveMode",
+	229:   "StatusEnteringExtendedPassiveMode",
+	230:   "StatusUserLoggedIn",
+	232:   "StatusUserAuthorized",
+	234:   "StatusSecurityExchangeOK",
+	250:   "StatusFileActionOK",
+	257:   "StatusPathnameCreated",
+	331:   "StatusCommandNotImplementedSuperfluous",
+	332:   "StatusNeedAccountForLogin",
+	350:   "StatusFileActionPending",
+	421:   "StatusServiceNotAvailable",
+	425:   "StatusCantOpenDataConnection",
+	426:   "StatusConnectionClosedTransferAborted",
+	430:   "StatusInvalidUsernameOrPassword",
+	431:   "StatusNeedResourceToProcessSecurity",
+	434:   "StatusRequestedHostUnavailable",
+	450:   "StatusRequestedFileActionNotTaken",
+	451:   "StatusLocalProcessingError",
+	452:   "StatusInsufficientStorage",
+	500:   "StatusSyntaxError",
+	501:   "StatusSyntaxErrorInParameters",
+	502:   "StatusSyntaxErrorNotImplemented",
+	503:   "StatusBadSequenceOfCommands",
+	504:   "StatusCommandNotImplementedForParam",
+	530:   "StatusNotLoggedIn",
+	532:   "StatusNeedAccountForStoringFiles",
+	550:   "StatusFileUnavailable",
+	551:   "StatusPageTypeUnknown",
+	552:   "StatusExceededStorageAllocation",
+	553:   "StatusFileNameNotAllowed",
+	631:   "StatusIntegrityProtected",
+	632:   "StatusConfidentialityIntegrityProtected",
+	633:   "StatusConfidentialityProtected",
+	10054: "WinsockConnectionResetByPeer",
+	10060: "WinsockCannotConnect",
+	10061: "WinsockConnectionRefused",
+	10065: "WinsockNoRouteToHost",
+	10066: "WinsockDirectoryNotEmpty",
+	10068: "WinsockTooManyUsers",
+}
+
+func StatusText(code int) string {
+	return statusText[code]
+}
+
+type Command = string
 
 const (
 	// Authentication and User Commands
