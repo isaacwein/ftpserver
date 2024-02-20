@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/telebroad/ftpserver/ftp"
 	"github.com/telebroad/ftpserver/server"
 	"github.com/telebroad/ftpserver/users"
 	"io"
@@ -71,6 +72,12 @@ func main() {
 	user1 := Users.Add("user", "password", 1)
 	user1.AddIP("127.0.0.1")
 	user1.AddIP("::1")
+	handler := ftp.NewServeMux()
+	handler.HandleFunc("", func(w ftp.ResponseWriter, r *ftp.Request) {
+
+	})
+
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 
 	ftpServer, err := server.NewFTPServer(ftpPort, ftpServerIPv4, server.NewFtpLocalFS(ftpServerRoot, "/"), Users, pasvMinPortP, pasvMaxPortP)
 	if err != nil {
@@ -85,11 +92,11 @@ func main() {
 	ftpServer.Stop()
 
 	// testing only
-	m := http.NewServeMux()
-
-	m.HandleFunc("/api/transcribe", func(w http.ResponseWriter, r *http.Request) {
-		r.GetBody()
-		fmt.Fprint(w, "Hello, world!")
-	})
-	http.ListenAndServe(":8080", m)
+	//m := http.NewServeMux()
+	//
+	//m.HandleFunc("/api/transcribe", func(w http.ResponseWriter, r *http.Request) {
+	//	r.GetBody()
+	//	fmt.Fprint(w, "Hello, world!")
+	//})
+	//http.ListenAndServe(":8080", m)
 }

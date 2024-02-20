@@ -7,8 +7,8 @@ import (
 	"sync"
 )
 
-// conn represents an individual client FTP session.
-type conn struct {
+// Session represents an individual client FTP session.
+type Session struct {
 	ftpServer                  *Server      // The server the session belongs to
 	conn                       net.Conn     // The connection to the client
 	writer                     io.Writer    // Writer for the connection (used for writing responses)
@@ -22,26 +22,26 @@ type conn struct {
 }
 
 // SessionManager manages all active sessions.
-type connManager struct {
-	sessions map[string]*conn // Map of active sessions
-	lock     sync.RWMutex     // Protects the sessions map
+type SessionManager struct {
+	sessions map[string]*Session // Map of active sessions
+	lock     sync.RWMutex        // Protects the sessions map
 }
 
-func newSessionManager() *connManager {
-	return &connManager{
-		sessions: make(map[string]*conn),
+func NewSessionManager() *SessionManager {
+	return &SessionManager{
+		sessions: make(map[string]*Session),
 	}
 }
 
 // Add adds a new session for the client.
-func (manager *connManager) Add(id string, session *conn) {
+func (manager *SessionManager) Add(id string, session *Session) {
 	manager.lock.Lock()
 	defer manager.lock.Unlock()
 	manager.sessions[id] = session
 }
 
 // Get retrieves a session by its ID.
-func (manager *connManager) Get(id string) (*conn, bool) {
+func (manager *SessionManager) Get(id string) (*Session, bool) {
 	manager.lock.RLock()
 	defer manager.lock.RUnlock()
 	session, exists := manager.sessions[id]
@@ -49,7 +49,7 @@ func (manager *connManager) Get(id string) (*conn, bool) {
 }
 
 // Remove removes a session by its ID.
-func (manager *connManager) Remove(id string) {
+func (manager *SessionManager) Remove(id string) {
 	manager.lock.Lock()
 	defer manager.lock.Unlock()
 	delete(manager.sessions, id)

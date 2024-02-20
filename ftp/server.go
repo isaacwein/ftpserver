@@ -5,7 +5,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/telebroad/ftpserver/server"
+	"io"
+	"io/fs"
 	"log"
 	"net"
 	"strings"
@@ -35,6 +36,10 @@ type Server struct {
 	// SetSessionTicketKeys, use Server.Serve with a TLS Listener
 	// instead.
 	TLSConfig *tls.Config
+	// to upgrade a non TLS to a TLS session
+	TLSeConfig *tls.Config
+	// to upgrade a non TLS to a SSH session
+	SSHConfig *tls.Config
 
 	// ReadTimeout is the maximum duration for reading the entire
 	// request, including the body. A zero or negative value means
@@ -75,7 +80,7 @@ type Server struct {
 
 	mu         sync.Mutex
 	listeners  map[*net.Listener]struct{}
-	activeConn map[*server.FTPSession]struct{} // Map of active sessions
+	activeConn map[*Session]struct{} // Map of active sessions
 
 	listenerGroup sync.WaitGroup // Protects the sessions map
 	onShutdown    []func()
@@ -109,8 +114,48 @@ func (s *Server) ListenAndServe() error {
 	}
 	// Accept connections in a new goroutine
 	fmt.Printf("starting listener on %#+v\n", s.listener)
+
+	if s.TLSConfig != nil {
+		s.supportsTLS = true
+	}
+
 	go s.Serve()
 	return nil
+}
+
+func (s *Server) ListenAndServeTLS(certFile, keyFile fs.File) (err error) {
+
+	cert, err := io.ReadAll(certFile)
+	if err != nil {
+		return fmt.Errorf("error reading certificate: %w", err)
+	}
+	key, err := io.ReadAll(keyFile)
+	if err != nil {
+		return fmt.Errorf("error reading key: %w", err)
+	}
+
+	config := &tls.Config{}
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.X509KeyPair(cert, key)
+	if err != nil {
+		return fmt.Errorf("error loading certificate: %w", err)
+	}
+	s.TLSConfig = config
+	return s.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.mu.Lock()
+	for _, f := range s.onShutdown {
+		go f()
+	}
+	s.mu.Unlock()
+	return nil
+}
+
+func ListenAndServe() error {
+	server := &Server{}
+	return server.ListenAndServe()
 }
 
 type Request struct {
@@ -139,9 +184,12 @@ type Request struct {
 	// TLS-enabled connections before invoking a handler;
 	// otherwise it leaves the field nil.
 	// This field is ignored by the HTTP client.
-	TLS *tls.ConnectionState
-	SSH *tls.ConnectionState
+
+	TLS  *tls.ConnectionState // TLS for FTPS
+	TLSe *tls.ConnectionState // TLS for FTPES
+	SSH  *tls.ConnectionState // TLS for SFTP
 }
+
 type Response struct {
 	Status     string // e.g. "200 OK"
 	StatusCode int    // e.g. 200
@@ -156,7 +204,9 @@ type Response struct {
 	// The pointer is shared between responses and should not be
 	// modified.
 	TLS *tls.ConnectionState
-
+	// TLSe contains information about the TLS connection on which the
+	TLSe *tls.ConnectionState
+	// SSH response was received. It is nil for unencrypted responses.
 	SSH *tls.ConnectionState
 
 	conn net.Conn
@@ -178,8 +228,13 @@ type ResponseWriter interface {
 type Handler interface {
 	ServeFTP(w ResponseWriter, r *Request)
 }
+
 type HandlerFunc func(ResponseWriter, *Request)
 
+// ServeFTP calls f(w, r).
+func (f HandlerFunc) ServeFTP(w ResponseWriter, r *Request) {
+	f(w, r)
+}
 func (s *Server) handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 
@@ -189,16 +244,16 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 	for {
-		reader, err := reader.ReadBytes('\n')
+		line, err := reader.ReadBytes('\n')
 		if err != nil {
 
 			return
 		}
 
 		request := &Request{
-			Method:     Command(strings.Trim(string(peek), "")),
+			Method:     strings.Trim(string(peek), ""),
 			Proto:      "",
-			Body:       reader,
+			Body:       line,
 			RemoteAddr: conn.RemoteAddr(),
 			RequestURI: conn.LocalAddr(),
 			TLS:        nil,
