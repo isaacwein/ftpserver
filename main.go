@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/telebroad/ftpserver/ftp"
 	"github.com/telebroad/ftpserver/server"
 	"github.com/telebroad/ftpserver/users"
 	"io"
@@ -10,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"time"
 )
 
 func main() {
@@ -68,35 +68,36 @@ func main() {
 		fmt.Println("Error converting PASV_MAX_PORT to int", "error", err)
 		return
 	}
+
+	// create a new user
 	Users := users.NewLocalUsers()
 	user1 := Users.Add("user", "password", 1)
 	user1.AddIP("127.0.0.1")
 	user1.AddIP("::1")
-	handler := ftp.NewServeMux()
-	handler.HandleFunc("", func(w ftp.ResponseWriter, r *ftp.Request) {
 
-	})
-
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
-
-	ftpServer, err := server.NewFTPServer(ftpPort, ftpServerIPv4, server.NewFtpLocalFS(ftpServerRoot, "/"), Users, pasvMinPortP, pasvMaxPortP)
+	ftpServer, err := server.NewServer(ftpPort, server.NewFtpLocalFS(ftpServerRoot, "/"), Users)
 	if err != nil {
 		fmt.Println("Error starting ftp server", "error", err)
 		return
 	}
-	ftpServer.Start()
+	err = ftpServer.SetPublicServerIPv4(ftpServerIPv4)
+	if err != nil {
+		fmt.Println("Error setting public server ip", "error", err)
+		return
+	}
+
+	ftpServer.PasvMinPort = pasvMinPortP
+	ftpServer.PasvMaxPort = pasvMaxPortP
+
+	err = ftpServer.TryListenAndServe(time.Second)
+	if err != nil {
+		return
+	}
+
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt)
 
 	<-stopChan
-	ftpServer.Stop()
+	ftpServer.Close(fmt.Errorf("server closed by signal"))
 
-	// testing only
-	//m := http.NewServeMux()
-	//
-	//m.HandleFunc("/api/transcribe", func(w http.ResponseWriter, r *http.Request) {
-	//	r.GetBody()
-	//	fmt.Fprint(w, "Hello, world!")
-	//})
-	//http.ListenAndServe(":8080", m)
 }

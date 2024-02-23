@@ -1,0 +1,17 @@
+[ req ]
+default_bits       = 2048
+prompt             = no
+default_md         = sha256
+distinguished_name = dn
+
+[ dn ]
+C  = US
+ST = Ney York
+L  = brooklyn
+O  = Telebroad
+OU = MyDepartment
+CN = localhost
+
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment

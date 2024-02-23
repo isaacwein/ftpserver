@@ -1,0 +1,20 @@
+Certificate Request:
+    Data:
+        Version: 1 (0x0)
+        Subject: C = US, ST = Ney York, L = brooklyn, O = Telebroad, OU = MyDepartment, CN = localhost
+        Subject Public Key Info:
+            Public Key Algorithm: ED25519
+                ED25519 Public-Key:
+                pub:
+                    9c:ef:89:f5:d5:78:2e:d9:d3:e6:cb:9e:52:8d:99:
+                    a8:37:a2:bb:e9:71:d1:02:6c:9d:bf:08:91:83:57:
+                    c3:af
+        Attributes:
+            (none)
+            Requested Extensions:
+    Signature Algorithm: ED25519
+    Signature Value:
+        2f:ca:1f:0a:91:a1:35:80:ed:ca:17:a4:a4:50:55:27:8e:18:
+        51:d0:54:88:39:7c:79:1d:14:74:ad:94:09:fa:cb:1f:6e:f6:
+        01:b9:c7:38:46:65:e8:98:9e:4f:0d:41:33:a8:32:d5:f8:6c:
+        dc:89:a4:60:ca:3b:8a:1e:05:0b
