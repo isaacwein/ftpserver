@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/telebroad/ftpserver/users"
+	"github.com/telebroad/ftpserver/ftp/ftpusers"
 	"net"
 	"net/netip"
 	"time"

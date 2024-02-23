@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/telebroad/ftpserver/users"
+	"github.com/telebroad/ftpserver/ftp/ftpusers"
 	"io"
 	"net"
 	"sync"

@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/telebroad/ftpserver/server"
-	"github.com/telebroad/ftpserver/users"
+	"github.com/telebroad/ftpserver/ftp"
+	"github.com/telebroad/ftpserver/ftp/ftpusers"
 	"io"
 	"net/http"
 	"os"
@@ -38,6 +38,11 @@ func main() {
 	if ftpPort == "" {
 		// Set a default port if the environment variable is not set
 		ftpPort = ":21"
+	}
+	ftpsPort := os.Getenv("FTPS_SERVER_PORT")
+	if ftpsPort == "" {
+		// Set a default port if the environment variable is not set
+		ftpsPort = ":990"
 	}
 	ftpServerRoot := os.Getenv("FTP_SERVER_ROOT")
 	if ftpServerRoot == "" {
@@ -91,9 +96,23 @@ func main() {
 
 	err = ftpServer.TryListenAndServe(time.Second)
 	if err != nil {
+		fmt.Println("Error starting ftp server", "error", err)
+		return
+	}
+	ftpsServer, err := server.NewServer(ftpsPort, server.NewFtpLocalFS(ftpServerRoot, "/"), Users)
+	err = ftpsServer.SetPublicServerIPv4(ftpServerIPv4)
+	if err != nil {
+		fmt.Println("Error setting public server ip", "error", err)
 		return
 	}
 
+	ftpsServer.PasvMinPort = pasvMinPortP
+	ftpsServer.PasvMaxPort = pasvMaxPortP
+	err = ftpsServer.TryListenAndServeTLS("tls/ssl-rsa/localhost.rsa.crt", "tls/ssl-rsa/localhost.rsa.key", time.Second)
+	if err != nil {
+		fmt.Println("Error starting ftp server", "error", err)
+		return
+	}
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt)
 

@@ -8,6 +8,7 @@ services:
     image: hub.deploy.telebroad.com/ftpserver:latest
     ports:
       - "21:21"
+      - "990:990"
       - "30000-30099:30000-30099"
     volumes:
       - ./static:/static # host:container
