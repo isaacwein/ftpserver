@@ -36,7 +36,7 @@ type Server struct {
 	Closer           chan error
 	ctx              context.Context
 	cancel           context.CancelCauseFunc
-	Logger           *slog.Logger
+	logger           *slog.Logger
 }
 
 // NewServer creates a new FTP server
@@ -92,6 +92,7 @@ func (s *Server) Listen() (err error) {
 
 // Serve starts the FTP server
 func (s *Server) Serve() {
+	s.Logger().Info("FTP serve started", "addr", s.Addr)
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
@@ -245,4 +246,13 @@ func (s *Server) Close(err error) {
 
 func (s *Server) Wait() error {
 	return <-s.Closer
+}
+func (s *Server) SetLogger(l *slog.Logger) {
+	s.logger = l
+}
+func (s *Server) Logger() *slog.Logger {
+	if s.logger == nil {
+		s.logger = slog.Default().With("module", "ftp-server")
+	}
+	return s.logger
 }

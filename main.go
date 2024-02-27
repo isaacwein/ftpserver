@@ -15,7 +15,7 @@ import (
 
 func main() {
 
-	logger := slog.Default()
+	logger := slog.Default().With("app", "ftp-server")
 
 	env, err := GetEnv()
 	if err != nil {
@@ -31,6 +31,7 @@ func main() {
 		fmt.Println("Error starting ftp server", "error", err)
 		return
 	}
+	ftpServer.SetLogger(logger)
 	err = ftpServer.SetPublicServerIPv4(env.FtpServerIPv4)
 	if err != nil {
 		fmt.Println("Error setting public server ip", "error", err)
@@ -52,10 +53,9 @@ func main() {
 	err = ftpServer.SetPublicServerIPv4(env.FtpServerIPv4)
 	if err != nil {
 		logger.Error("Error setting public server ip", "error", err)
-
 		return
 	}
-
+	ftpsServer.SetLogger(logger)
 	ftpsServer.PasvMinPort = env.PasvMinPort
 	ftpsServer.PasvMaxPort = env.PasvMaxPort
 	err = ftpsServer.TryListenAndServeTLS(env.CrtFile, env.KeyFile, time.Second)

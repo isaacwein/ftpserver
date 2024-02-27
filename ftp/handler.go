@@ -24,17 +24,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer func() {
 		if r := recover(); r != nil {
 
-			if s.Logger != nil {
-				s.Logger.Error("recovered", "error", r, "stack", string(debug.Stack()))
-			} else {
-				fmt.Fprintln(os.Stderr, "Recovered from panic:", r)
-				fmt.Fprintln(os.Stderr, "stack:", string(debug.Stack()))
-			}
+			s.Logger().Error("recovered", "error", r, "stack", string(debug.Stack()))
 		}
 	}()
 	defer conn.Close()
 
-	logWriter := NewBufLogReadWriter(conn, s.Logger)
+	logWriter := NewBufLogReadWriter(conn, s.Logger())
 
 	sessionID := generateSessionID(conn)
 	session := &Session{
@@ -178,7 +173,7 @@ func (s *Session) AuthCommand(cmd, arg string) error {
 		fmt.Fprintf(s.readWriter, "500 Server error upgrading to TLS: %s\r\n", err.Error())
 	}
 
-	s.readWriter = NewBufLogReadWriter(s.conn, s.ftpServer.Logger)
+	s.readWriter = NewBufLogReadWriter(s.conn, s.ftpServer.Logger())
 
 	return nil
 }
