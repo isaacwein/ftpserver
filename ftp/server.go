@@ -1,10 +1,11 @@
-package server
+package ftp
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/telebroad/ftpserver/ftp/ftpusers"
+	"log/slog"
 	"net"
 	"net/netip"
 	"time"
@@ -24,21 +25,22 @@ type Server struct {
 	FsHandler        FtpFS
 	Root             string
 	sessionManager   *SessionManager
-	users            users.Users
+	users            ftpusers.Users
 	WelcomeMessage   string
 	PublicServerIPv4 [4]byte
 	Type             FTPServerTransferType
 	PasvMaxPort      int
 	PasvMinPort      int
 	TLS              *tls.Config
+	TLSe             *tls.Config
 	Closer           chan error
 	ctx              context.Context
 	cancel           context.CancelCauseFunc
+	Logger           *slog.Logger
 }
 
 // NewServer creates a new FTP server
-func NewServer(addr string, fsHandler FtpFS, users users.Users) (*Server, error) {
-
+func NewServer(addr string, fsHandler FtpFS, users ftpusers.Users) (*Server, error) {
 	s := &Server{
 		Addr:           addr,
 		FsHandler:      fsHandler,
@@ -78,7 +80,6 @@ func (s *Server) Listen() (err error) {
 		return fmt.Errorf("error starting server: %w", err)
 	}
 	// Accept connections in a new goroutine
-	fmt.Printf("starting listener on %#+v\n", s.Addr)
 
 	go func() {
 		<-s.ctx.Done()
@@ -102,7 +103,7 @@ func (s *Server) Serve() {
 			continue
 		}
 		if s.TLS != nil {
-			conn, err = s.upgradeToTLS(conn)
+			conn, err = s.upgradeToTLS(conn, s.TLS)
 			if err != nil {
 				return
 			}
@@ -112,8 +113,8 @@ func (s *Server) Serve() {
 }
 
 // upgradeToTLS upgrades the connection to a TLS session
-func (s *Server) upgradeToTLS(c net.Conn) (net.Conn, error) {
-	tlsConn := tls.Server(c, s.TLS)
+func (s *Server) upgradeToTLS(c net.Conn, config *tls.Config) (net.Conn, error) {
+	tlsConn := tls.Server(c, config)
 	if err := tlsConn.Handshake(); err != nil {
 		err = fmt.Errorf("TLS Handshake error: %w", err)
 		return c, err
@@ -135,6 +136,19 @@ func (s *Server) ServeTLS(certFile, keyFile string) (err error) {
 	return nil
 }
 
+// ServeTLSe starts the FTP server and allow upgrade to TLS
+func (s *Server) ServeTLSe(certFile, keyFile string) (err error) {
+
+	s.TLS = &tls.Config{Certificates: make([]tls.Certificate, 1)}
+
+	s.TLS.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return fmt.Errorf("error loading certificate: %w", err)
+	}
+	s.Serve()
+	return nil
+}
+
 // ListenAndServe starts the FTP server
 func (s *Server) ListenAndServe() (err error) {
 	err = s.Listen()
@@ -143,6 +157,17 @@ func (s *Server) ListenAndServe() (err error) {
 	}
 	s.Serve()
 	return nil
+}
+
+// ListenAndServeTLSe and allow upgrade to TLS
+func (s *Server) ListenAndServeTLSe(certFile, keyFile string) (err error) {
+	err = s.Listen()
+	if err != nil {
+		return err
+	}
+	err = s.ServeTLSe(certFile, keyFile)
+
+	return
 }
 
 // ListenAndServeTLS starts the FTP server
@@ -162,6 +187,25 @@ func (s *Server) TryListenAndServe(d time.Duration) (err error) {
 
 	go func() {
 		err = s.ListenAndServe()
+		if err != nil {
+			errC <- err
+		}
+	}()
+
+	select {
+	case err = <-errC:
+		return err
+	case <-time.After(d):
+		return nil
+	}
+}
+
+// TryListenAndServeTLSe strives to starts the FTP server if there isn't an error after a certain time it returns nil
+func (s *Server) TryListenAndServeTLSe(certFile, keyFile string, d time.Duration) (err error) {
+	errC := make(chan error)
+
+	go func() {
+		err = s.ListenAndServeTLSe(certFile, keyFile)
 		if err != nil {
 			errC <- err
 		}

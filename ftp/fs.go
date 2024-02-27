@@ -1,4 +1,4 @@
-package server
+package ftp
 
 import (
 	"bufio"
@@ -242,11 +242,10 @@ func (FS *FtpLocalFS) Lstat() {
 
 }
 
-func NewFtpLocalFS(localDir, virtualRoot string) *FtpLocalFS {
-	virtualRoot = filepath.Clean(virtualRoot)
+func NewFtpLocalFS(localDir string) *FtpLocalFS {
 	ftpLocalFS := &FtpLocalFS{
 		localDir:    localDir,
-		virtualRoot: virtualRoot,
+		virtualRoot: "/",
 		FS:          os.DirFS(localDir),
 	}
 	return ftpLocalFS
