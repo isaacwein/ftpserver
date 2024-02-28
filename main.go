@@ -1,3 +1,12 @@
+// Description: This is the main file of the ftp server
+// The main function starts the ftp server and the ftps server
+// The ftp server is started on port 21 and the ftps server is started on port 990
+// The ftp server is started with the TryListenAndServeTLSe function and the ftps server is started with the TryListenAndServeTLS function
+// The ftp server and the ftpes server are started with the TryListenAndServe function
+// The ftpes server are started with the TryListenAndServeTLSe function
+// The ftps server are started with the TryListenAndServeTLS function
+// you can run it with the docker-compose file in the root of the project
+
 package main
 
 import (
