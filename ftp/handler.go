@@ -198,11 +198,12 @@ func (s *Session) PassCommand(cmd, arg string) (err error) {
 
 	RemoteIP, err := netip.ParseAddrPort(s.conn.RemoteAddr().String())
 	if err != nil {
-		return fmt.Errorf("error parsing remote ip: %w", err)
+		err = fmt.Errorf("error parsing remote ip: %w", err)
+		fmt.Fprintf(s.readWriter, "530 Error: %s\r\n", err.Error())
 	}
 	s.userInfo, err = s.ftpServer.users.Find(s.username, arg, RemoteIP.Addr().String())
 	if err != nil {
-		fmt.Fprintf(s.readWriter, "530 Error %s\r\n", err.Error())
+		fmt.Fprintf(s.readWriter, "530 Error: %s\r\n", err.Error())
 		return err
 	}
 
@@ -607,6 +608,7 @@ func (s *Session) SaveCommand(cmd, arg string) error {
 		return nil
 	}
 	defer dataConn.Close()
+
 	filename := Abs(s.root, s.workingDir, arg)
 	appendOnly := false
 	if cmd == "APPE" {
@@ -655,7 +657,7 @@ func (s *Session) GetDirInfoCommand(cmd, arg string) error {
 	defer s.CloseDataConnection()
 	fmt.Fprintf(s.readWriter, "150 Here comes the directory listing.\r\n")
 	dataConn, err := s.PassiveOrActiveModeConn()
-
+	dataConnRW := NewBufLogReadWriter(dataConn, s.ftpServer.Logger())
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "425 Can't open data connection: %s\r\n", err.Error())
 		return nil
@@ -670,8 +672,7 @@ func (s *Session) GetDirInfoCommand(cmd, arg string) error {
 	}
 
 	for _, entry := range entries {
-		fmt.Println("dataConn:", entry)
-		fmt.Fprintf(dataConn, "%s\r\n", entry)
+		fmt.Fprintf(dataConnRW, "%s\r\n", entry)
 	}
 
 	fmt.Fprintf(s.readWriter, "226 Directory send OK.\r\n")
@@ -747,7 +748,7 @@ func (s *Session) RetrieveCommand(cmd, arg string) error {
 	}
 	defer dataConn.Close()
 	filename := Abs(s.root, s.workingDir, arg)
-	fmt.Println("RETR:", filename)
+	s.ftpServer.Logger().Debug("RETR:", filename)
 	_, err = s.ftpServer.FsHandler.Read(filename, dataConn)
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "550 Error reading the file: %s\r\n", err.Error())

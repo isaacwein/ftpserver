@@ -10,10 +10,9 @@ import (
 )
 
 type User struct {
-	Username   string
-	Password   string
-	CustomerID int64
-	IPs        map[string]*netip.Prefix
+	Username string
+	Password string
+	IPs      map[string]*netip.Prefix
 }
 
 func UniqSlice[T comparable](s []T) []T {
@@ -127,10 +126,9 @@ func (u *LocalUsers) Add(user, pass string, customerID int64) *User {
 	defer u.wg.Unlock()
 
 	newUser := &User{
-		Username:   user,
-		Password:   pass,
-		CustomerID: customerID,
-		IPs:        make(map[string]*netip.Prefix),
+		Username: user,
+		Password: pass,
+		IPs:      make(map[string]*netip.Prefix),
 	}
 
 	u.users[newUser.Username] = newUser
