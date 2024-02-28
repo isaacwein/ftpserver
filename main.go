@@ -13,9 +13,7 @@ import (
 	"fmt"
 	"github.com/telebroad/ftpserver/ftp"
 	"github.com/telebroad/ftpserver/ftp/ftpusers"
-	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -138,16 +136,10 @@ func GetEnv(logger *slog.Logger) (env *Environment, err error) {
 
 		// Set a default FTP_SERVER_IPV4 if the environment variable is not set
 		fmt.Println("FTP_SERVER_IPV4 was empty so Getting public ip from ipify.org...")
-		ipifyRes, err := http.Get("https://api.ipify.org")
+		env.FtpServerIPv4, err = ftp.GetServerPublicIP()
 		if err != nil {
 			return nil, fmt.Errorf("error getting public ip: %w", err)
 		}
-		ftpServerIPv4b, err := io.ReadAll(ipifyRes.Body)
-		if err != nil {
-			return nil, fmt.Errorf("error reading public ip: %w", err)
-		}
-		env.FtpServerIPv4 = string(ftpServerIPv4b)
-
 		// Set a default port if the environment variable is not set
 	}
 	env.FtpPort = os.Getenv("FTP_SERVER_PORT")
