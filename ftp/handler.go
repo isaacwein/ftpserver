@@ -187,34 +187,23 @@ func (s *Session) UserCommand(cmd, arg string) (err error) {
 		fmt.Fprintf(s.readWriter, "%s\r\n", err.Error())
 		return err
 	}
-	user, err := s.ftpServer.users.Get(arg)
-	if err != nil {
-		err = fmt.Errorf("530 Error: Searching for user failed")
-		fmt.Fprintf(s.readWriter, "%s\r\n", err.Error())
-		return
-	}
-	s.userInfo = user
+	s.username = arg
+
 	fmt.Fprintf(s.readWriter, "331 Please specify the password\r\n")
 	return
 }
 
 // PassCommand handles the PASS command from the client.
 func (s *Session) PassCommand(cmd, arg string) (err error) {
-	if s.userInfo == nil {
-		err = fmt.Errorf("503 Error: User not specified")
-		fmt.Fprintf(s.readWriter, "%s\r\n", err.Error())
-		return
+
+	RemoteIP, err := netip.ParseAddrPort(s.conn.RemoteAddr().String())
+	if err != nil {
+		return fmt.Errorf("error parsing remote ip: %w", err)
 	}
-	if s.userInfo.Password != arg {
-		err = fmt.Errorf("430 Invalid username or password")
-		fmt.Fprintf(s.readWriter, "%s\r\n", err.Error())
-		return
-	}
-	remoteIP := s.conn.RemoteAddr().String()
-	if !s.userInfo.FindIP(remoteIP) {
-		err = fmt.Errorf("530 Error: IP not allowed")
-		fmt.Fprintf(s.readWriter, "%s\r\n", err.Error())
-		return
+	s.userInfo, err = s.ftpServer.users.Find(s.username, arg, RemoteIP.Addr().String())
+	if err != nil {
+		fmt.Fprintf(s.readWriter, "530 Error %s\r\n", err.Error())
+		return err
 	}
 
 	s.isAuthenticated = true

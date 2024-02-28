@@ -2,7 +2,6 @@ package ftp
 
 import (
 	"bufio"
-	"github.com/telebroad/ftpserver/ftp/ftpusers"
 	"io"
 	"log/slog"
 	"net"
@@ -14,9 +13,10 @@ type Session struct {
 	ftpServer                  *Server           // The server the session belongs to
 	conn                       net.Conn          // The connection to the client
 	readWriter                 *BufLogReadWriter // ReadWriter for the connection (used for writing responses)
-	userInfo                   *ftpusers.User    // Authenticated user
+	userInfo                   any               // Authenticated user
 	workingDir                 string            // Current working directory
 	root                       string            // directory on the server acts as the root
+	username                   string            // Username of the client
 	isAuthenticated            bool              // Authentication status
 	useTLSForDataConnection    bool              // Data listener level false is `C` clear, if true is `P` protected
 	dataListener               net.Listener      // data transfer connection

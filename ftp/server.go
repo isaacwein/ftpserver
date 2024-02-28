@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/telebroad/ftpserver/ftp/ftpusers"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -18,6 +17,10 @@ const (
 	typeI FTPServerTransferType = "I"
 )
 
+type Users interface {
+	// Find returns a user by username and password, if the user is not found it returns an error
+	Find(username, password, ipaddr string) (any, error)
+}
 type Server struct {
 	listener         net.Listener
 	Addr             string
@@ -25,7 +28,7 @@ type Server struct {
 	FsHandler        FtpFS
 	Root             string
 	sessionManager   *SessionManager
-	users            ftpusers.Users
+	users            Users
 	WelcomeMessage   string
 	PublicServerIPv4 [4]byte
 	Type             FTPServerTransferType
@@ -40,7 +43,7 @@ type Server struct {
 }
 
 // NewServer creates a new FTP server
-func NewServer(addr string, fsHandler FtpFS, users ftpusers.Users) (*Server, error) {
+func NewServer(addr string, fsHandler FtpFS, users Users) (*Server, error) {
 	s := &Server{
 		Addr:           addr,
 		FsHandler:      fsHandler,

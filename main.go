@@ -79,14 +79,14 @@ func main() {
 
 }
 
-func GetUsers() ftpusers.Users {
+func GetUsers() ftp.Users {
 	Users := ftpusers.NewLocalUsers()
 	user1 := Users.Add("user", "password", 1)
 	user1.AddIP("127.0.0.0/8")
 	user1.AddIP("10.0.0.0/8")
 	user1.AddIP("172.16.0.0/12")
 	user1.AddIP("192.168.0.0/16")
-	// todo add ipv6
+	user1.AddIP("fd00::/8")
 	user1.AddIP("::1")
 	return Users
 }
