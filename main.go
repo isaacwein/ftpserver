@@ -32,14 +32,14 @@ func main() {
 	slog.SetDefault(logger)
 
 	logger.Debug("Starting FTP server")
-	env, err := GetEnv()
+	env, err := GetEnv(logger)
 	if err != nil {
 		logger.Error("Error getting environment", "error", err)
 		os.Exit(1)
 	}
 	// create a new user
 
-	users := GetUsers()
+	users := GetUsers(env.DefaultUserEnv)
 
 	ftpServer, err := ftp.NewServer(env.FtpPort, ftp.NewFtpLocalFS(env.FtpServerRoot), users)
 	if err != nil {
@@ -88,9 +88,22 @@ func main() {
 
 }
 
-func GetUsers() ftp.Users {
+func GetUsers(defaultUser DefaultUserEnv) ftp.Users {
 	Users := ftpusers.NewLocalUsers()
-	user1 := Users.Add("user", "password", 1)
+
+	if defaultUser.FtpDefaultUser != "" {
+		defaultUser.FtpDefaultUser = "user"
+	}
+
+	if defaultUser.FtpDefaultPass != "" {
+		defaultUser.FtpDefaultPass = "password"
+	}
+
+	if defaultUser.FtpDefaultIp != "" {
+		defaultUser.FtpDefaultIp = "127.0.0.0/8"
+	}
+
+	user1 := Users.Add(defaultUser.FtpDefaultUser, defaultUser.FtpDefaultPass)
 	user1.AddIP("127.0.0.0/8")
 	user1.AddIP("10.0.0.0/8")
 	user1.AddIP("172.16.0.0/12")
@@ -100,6 +113,11 @@ func GetUsers() ftp.Users {
 	return Users
 }
 
+type DefaultUserEnv struct {
+	FtpDefaultUser string
+	FtpDefaultPass string
+	FtpDefaultIp   string
+}
 type Environment struct {
 	FtpPort       string
 	FtpsPort      string
@@ -109,9 +127,10 @@ type Environment struct {
 	FtpServerRoot string
 	PasvMinPort   int
 	PasvMaxPort   int
+	DefaultUserEnv
 }
 
-func GetEnv() (env *Environment, err error) {
+func GetEnv(logger *slog.Logger) (env *Environment, err error) {
 	env = &Environment{}
 	// this is the bublic ip of the server FOR PASV mode
 	env.FtpServerIPv4 = os.Getenv("FTP_SERVER_IPV4")
@@ -128,7 +147,7 @@ func GetEnv() (env *Environment, err error) {
 			return nil, fmt.Errorf("error reading public ip: %w", err)
 		}
 		env.FtpServerIPv4 = string(ftpServerIPv4b)
-		fmt.Println("FTP_SERVER_IPV4 is ", env.FtpServerIPv4)
+
 		// Set a default port if the environment variable is not set
 	}
 	env.FtpPort = os.Getenv("FTP_SERVER_PORT")
@@ -149,6 +168,9 @@ func GetEnv() (env *Environment, err error) {
 		env.FtpServerRoot = "/static"
 		fmt.Println("FTP_SERVER_ROOT default to /static")
 	}
+	logger.Info("FTP_SERVER_IPV4 is", "IP", env.FtpServerIPv4)
+	logger.Info("FTP_SERVER_PORT is", "PORT", env.FtpPort)
+	logger.Info("FTP_SERVER_ROOT is", "ROOT", env.FtpServerRoot)
 
 	pasvMinPort := os.Getenv("PASV_MIN_PORT")
 	if pasvMinPort == "" {
@@ -162,18 +184,31 @@ func GetEnv() (env *Environment, err error) {
 		// Set a default port if the environment variable is not set
 		pasvMaxPort = "30009"
 	}
+
 	// convert to int
 	env.PasvMinPort, err = strconv.Atoi(pasvMinPort)
 	if err != nil {
 		return nil, fmt.Errorf("error converting PASV_MIN_PORT to int: %w", err)
 	}
+
 	env.PasvMaxPort, err = strconv.Atoi(pasvMaxPort)
 	if err != nil {
-
 		return nil, fmt.Errorf("error converting PASV_MAX_PORT to int: %w", err)
 	}
+	logger.Info("PASV_MIN_PORT is", "PORT", env.PasvMinPort)
+	logger.Info("PASV_MAX_PORT is", "PORT", env.PasvMaxPort)
 
-	env.CrtFile = "tls/ssl-rsa/localhost.rsa.crt"
-	env.KeyFile = "tls/ssl-rsa/localhost.rsa.key"
+	env.CrtFile = os.Getenv("CRT_FILE")
+	logger.Info("CRT_FILE is ", env.CrtFile)
+	env.KeyFile = os.Getenv("KEY_FILE")
+	logger.Info("KEY_FILE is ", env.KeyFile)
+
+	env.FtpDefaultUser = os.Getenv("FTP_DEFAULT_USER")
+	env.FtpDefaultPass = os.Getenv("FTP_DEFAULT_PASS")
+	env.FtpDefaultIp = os.Getenv("FTP_DEFAULT_IP")
+	logger.Info("FTP_DEFAULT_USER is", "username", env.FtpDefaultUser)
+	logger.Info("FTP_DEFAULT_PASS is", "password", env.FtpDefaultPass)
+	logger.Info("FTP_DEFAULT_IP is", "Allowed form origin IP", env.FtpDefaultIp)
+
 	return
 }

@@ -18,4 +18,6 @@ ENV FTP_SERVER_PORT=:21
 ENV FTPS_SERVER_PORT=:990
 ENV PASV_MIN_PORT=30000
 ENV PASV_MAX_PORT=30009
+ENV CRT_FILE=tls/ssl-rsa/localhost.rsa.crt
+ENV KEY_FILE=tls/ssl-rsa/localhost.rsa.key
 ENTRYPOINT ["./ftpserver"]

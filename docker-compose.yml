@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  ftpserver:
+  ftp-server:
     build:
       context: .
       dockerfile: Dockerfile
@@ -17,4 +17,9 @@ services:
       FTP_SERVER_IPV4: 127.0.0.1
       PASV_MIN_PORT: 30000
       PASV_MAX_PORT: 30009
-    container_name: ftpserver
+      FTP_DEFAULT_USER: user
+      FTP_DEFAULT_PASS: password
+      FTP_DEFAULT_IP: 127.0.0.0/8
+      CRT_FILE: tls/ssl-rsa/localhost.rsa.crt
+      KEY_FILE: tls/ssl-rsa/localhost.rsa.key
+    container_name: ftp-server

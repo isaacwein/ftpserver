@@ -121,7 +121,7 @@ func (u *LocalUsers) Find(username, password, ipaddr string) (any, error) {
 }
 
 // Add adds a new user
-func (u *LocalUsers) Add(user, pass string, customerID int64) *User {
+func (u *LocalUsers) Add(user, pass string) *User {
 	u.wg.Lock()
 	defer u.wg.Unlock()
 
