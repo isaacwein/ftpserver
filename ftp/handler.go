@@ -79,6 +79,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		"REST": session.RessetCommand,                  // REST is used to restart the file transfer
 		"TYPE": session.TypeCommand,                    // TYPE is used to specify the type of file being transferred
 		"MODE": session.ModeCommand,                    // MODE is used to specify the transfer mode (stream, block, or compressed)
+		"PBSZ": session.PbszCommand,                    // PBSZ is used to specify the buffer size to be used for the data channel protection level
 		"PROT": session.PROTCommand,                    // PROT is used to specify the data channel protection level
 		"STRU": session.StruCommand,                    // STRU is used to specify the file structure (file, record, or page)
 		"PASV": session.PassiveModeCommand,             // PASV is used to enter passive mode
@@ -121,7 +122,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 		if command, ok := handlersSecure[cmd]; ok {
-			if session.isAuthenticated {
+			if !session.isAuthenticated {
 				session.UnAuthenticatedCommand(cmd, arg)
 				return
 			}
@@ -165,6 +166,7 @@ func (s *Session) AuthCommand(cmd, arg string) error {
 		fmt.Fprintf(s.readWriter, "500 TLS not supported\r\n")
 		return nil
 	}
+
 	fmt.Fprintf(s.readWriter, "234 AUTH command ok. Expecting TLS Negotiation.\r\n")
 
 	var err error
@@ -208,6 +210,13 @@ func (s *Session) PassCommand(cmd, arg string) (err error) {
 		fmt.Fprintf(s.readWriter, "%s\r\n", err.Error())
 		return
 	}
+	remoteIP := s.conn.RemoteAddr().String()
+	if !s.userInfo.FindIP(remoteIP) {
+		err = fmt.Errorf("530 Error: IP not allowed")
+		fmt.Fprintf(s.readWriter, "%s\r\n", err.Error())
+		return
+	}
+
 	s.isAuthenticated = true
 	fmt.Fprintf(s.readWriter, "230 Login successful\r\n")
 	return
@@ -369,16 +378,32 @@ func (s *Session) ModeCommand(cmd, args string) error {
 	}
 	return nil
 }
+
+func (s *Session) PbszCommand(cmd string, arg string) error {
+	if arg == "0" {
+		fmt.Fprintf(s.readWriter, "200 PBSZ set to 0.\r\n")
+	} else {
+		fmt.Fprintf(s.readWriter, "501 Syntax error in parameters or arguments.\r\n")
+	}
+	return nil
+}
+
+// PROTCommand handles the PROT command from the client.
 func (s *Session) PROTCommand(cmd, args string) error {
-	if args == "C" { // Clear
+	// Clear
+	if args == "C" {
 		s.useTLSForDataConnection = false
 		fmt.Fprintf(s.readWriter, "200 Data channel protection level set to C.\r\n")
-	} else if args == "P" { // Private
-		s.useTLSForDataConnection = true
-	} else {
-		// Other protection levels are not commonly supported or required
-		fmt.Fprintf(s.readWriter, "504 Protection level %s not implemented.\r\n", args)
+		return nil
 	}
+	// Private
+	if args == "P" {
+		s.useTLSForDataConnection = true
+		fmt.Fprintf(s.readWriter, "200 Data channel protection level set to P.\r\n")
+		return nil
+	}
+	// Other protection levels are not commonly supported or required
+	fmt.Fprintf(s.readWriter, "504 Protection level %s not implemented.\r\n", args)
 	return nil
 }
 
@@ -386,10 +411,10 @@ func (s *Session) PROTCommand(cmd, args string) error {
 func (s *Session) StruCommand(cmd, args string) error {
 	if args == "F" { // File structure
 		fmt.Fprintf(s.readWriter, "200 Structure set to F.\r\n")
-	} else {
-		// Other structures are not commonly supported or required
-		fmt.Fprintf(s.readWriter, "504 Structure %s not implemented.\r\n", args)
+		return nil
 	}
+	// Other structures are not commonly supported or required
+	fmt.Fprintf(s.readWriter, "504 Structure %s not implemented.\r\n", args)
 	return nil
 }
 
@@ -398,7 +423,6 @@ func (s *Session) StruCommand(cmd, args string) error {
 func findAvailablePortInRange(start, end int) (net.Listener, int, error) {
 	for port := start; port <= end; port++ {
 		address := fmt.Sprintf(":%d", port)
-
 		listener, err := net.Listen("tcp", address)
 		if err == nil {
 			return listener, port, nil

@@ -13,7 +13,7 @@ import (
 type Session struct {
 	ftpServer                  *Server           // The server the session belongs to
 	conn                       net.Conn          // The connection to the client
-	readWriter                 *bufio.ReadWriter // ReadWriter for the connection (used for writing responses)
+	readWriter                 *BufLogReadWriter // ReadWriter for the connection (used for writing responses)
 	userInfo                   *ftpusers.User    // Authenticated user
 	workingDir                 string            // Current working directory
 	root                       string            // directory on the server acts as the root
@@ -87,13 +87,18 @@ func NewLogReadWriter(rw io.ReadWriter, logger *slog.Logger) *LogReaderWriter {
 	return &LogReaderWriter{ReadWriter: rw, logger: logger}
 }
 
+type BufLogReadWriter struct {
+	io.Writer
+	*bufio.Reader
+}
+
 // NewBufLogReadWriter creates a new BufLogReadWriter. It wraps a bufio.ReadWriter and logs all reads and writes to a slog.Logger.
 // the reason to divide it in 2 structs is to avoid the need to implement all the methods of bufio.ReadWriter
-func NewBufLogReadWriter(rw io.ReadWriter, logger *slog.Logger) *bufio.ReadWriter {
+func NewBufLogReadWriter(rw io.ReadWriter, logger *slog.Logger) *BufLogReadWriter {
 	rw = &LogReaderWriter{ReadWriter: rw, logger: logger}
 
-	return &bufio.ReadWriter{
+	return &BufLogReadWriter{
 		Reader: bufio.NewReader(rw),
-		Writer: bufio.NewWriter(rw),
+		Writer: rw,
 	}
 }

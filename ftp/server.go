@@ -92,8 +92,17 @@ func (s *Server) Listen() (err error) {
 
 // Serve starts the FTP server
 func (s *Server) Serve() {
-	s.Logger().Info("FTP serve started", "addr", s.Addr)
+
+	if s.TLS != nil {
+		s.Logger().Debug("FTPS serve started", "addr", s.Addr)
+	} else if s.TLSe != nil {
+		s.Logger().Debug("FTPES serve started", "addr", s.Addr)
+	} else {
+		s.Logger().Debug("FTP serve started", "addr", s.Addr)
+	}
+
 	for {
+
 		conn, err := s.listener.Accept()
 		if err != nil {
 			if s.ctx.Err() != nil {
@@ -103,12 +112,16 @@ func (s *Server) Serve() {
 			fmt.Println("Error accepting connection:", err)
 			continue
 		}
+
 		if s.TLS != nil {
+			s.Logger().Debug("Upgrading to TLS")
 			conn, err = s.upgradeToTLS(conn, s.TLS)
 			if err != nil {
+				s.Logger().Error("Error upgrading to TLS", "error", err)
 				return
 			}
 		}
+
 		go s.handleConnection(conn)
 	}
 }
@@ -140,9 +153,9 @@ func (s *Server) ServeTLS(certFile, keyFile string) (err error) {
 // ServeTLSe starts the FTP server and allow upgrade to TLS
 func (s *Server) ServeTLSe(certFile, keyFile string) (err error) {
 
-	s.TLS = &tls.Config{Certificates: make([]tls.Certificate, 1)}
+	s.TLSe = &tls.Config{Certificates: make([]tls.Certificate, 1)}
 
-	s.TLS.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	s.TLSe.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return fmt.Errorf("error loading certificate: %w", err)
 	}

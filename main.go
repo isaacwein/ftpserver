@@ -14,9 +14,15 @@ import (
 )
 
 func main() {
+	handlerOptions := &slog.HandlerOptions{
+		AddSource:   true,
+		Level:       slog.LevelDebug, // Only log messages of level INFO and above
+		ReplaceAttr: nil,
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, handlerOptions)).With("app", "ftp-server")
+	slog.SetDefault(logger)
 
-	logger := slog.Default().With("app", "ftp-server")
-
+	logger.Debug("Starting FTP server")
 	env, err := GetEnv()
 	if err != nil {
 		logger.Error("Error getting environment", "error", err)
@@ -76,7 +82,11 @@ func main() {
 func GetUsers() ftpusers.Users {
 	Users := ftpusers.NewLocalUsers()
 	user1 := Users.Add("user", "password", 1)
-	user1.AddIP("127.0.0.1")
+	user1.AddIP("127.0.0.0/8")
+	user1.AddIP("10.0.0.0/8")
+	user1.AddIP("172.16.0.0/12")
+	user1.AddIP("192.168.0.0/16")
+	// todo add ipv6
 	user1.AddIP("::1")
 	return Users
 }

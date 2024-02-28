@@ -2,6 +2,9 @@ package ftpusers
 
 import (
 	"errors"
+	"fmt"
+	"net/netip"
+	"strings"
 	"sync"
 )
 
@@ -9,7 +12,7 @@ type User struct {
 	Username   string
 	Password   string
 	CustomerID int64
-	IPs        []string
+	IPs        map[string]*netip.Prefix
 }
 
 func UniqSlice[T comparable](s []T) []T {
@@ -24,26 +27,44 @@ func UniqSlice[T comparable](s []T) []T {
 	return result
 }
 
+// FindIP finds an IP in the prefixes in the user
 func (u *User) FindIP(ip string) bool {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
 	for _, v := range u.IPs {
-		if v == ip {
+		if v.Contains(addr) {
 			return true
 		}
 	}
 	return false
 }
 
-func (u *User) AddIP(ip string) {
-	u.IPs = UniqSlice(append(u.IPs, ip))
-}
-func (u *User) RemoveIP(ip string) {
-	var result []string
-	for _, v := range u.IPs {
-		if v != ip {
-			result = append(result, v)
-		}
+// AddIP adds an IP prefix to the user
+// if the ip is without the prefix, it will add /32
+func (u *User) AddIP(ip string) error {
+	if !strings.Contains(ip, "/") {
+		ip = ip + "/32"
 	}
-	u.IPs = result
+
+	prefix, err := netip.ParsePrefix(ip)
+	if err != nil {
+		return fmt.Errorf("error parsing IP: %w", err)
+	}
+
+	u.IPs[ip] = &prefix
+	return nil
+}
+
+// RemoveIP removes an IP prefix from the user
+// if the ip is without the prefix, it will add /32
+func (u *User) RemoveIP(ip string) {
+	if !strings.Contains(ip, "/") {
+		ip = ip + "/32"
+	}
+
+	delete(u.IPs, ip)
 }
 
 type Users interface {
@@ -85,7 +106,7 @@ func (u *LocalUsers) Add(user, pass string, customerID int64) *User {
 		Username:   user,
 		Password:   pass,
 		CustomerID: customerID,
-		IPs:        []string{},
+		IPs:        make(map[string]*netip.Prefix),
 	}
 
 	u.users[newUser.Username] = newUser
