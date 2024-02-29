@@ -39,7 +39,7 @@ func main() {
 
 	users := GetUsers(env.DefaultUserEnv)
 
-	ftpServer, err := ftp.NewServer(env.FtpPort, ftp.NewFtpLocalFS(env.FtpServerRoot), users)
+	ftpServer, err := ftp.NewServer(env.FtpAddr, ftp.NewFtpLocalFS(env.FtpServerRoot), users)
 	if err != nil {
 		fmt.Println("Error starting ftp server", "error", err)
 		return
@@ -60,9 +60,9 @@ func main() {
 		return
 	}
 
-	logger.Info("FTP server started", "port", env.FtpPort)
+	logger.Info("FTP server started", "port", env.FtpAddr)
 
-	ftpsServer, err := ftp.NewServer(env.FtpsPort, ftp.NewFtpLocalFS(env.FtpServerRoot), users)
+	ftpsServer, err := ftp.NewServer(env.FtpsAddr, ftp.NewFtpLocalFS(env.FtpServerRoot), users)
 	err = ftpServer.SetPublicServerIPv4(env.FtpServerIPv4)
 	if err != nil {
 		logger.Error("Error setting public server ip", "error", err)
@@ -77,7 +77,7 @@ func main() {
 		return
 	}
 
-	logger.Info("FTPS server started", "port", env.FtpsPort)
+	logger.Info("FTPS server started", "port", env.FtpsAddr)
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt)
 
@@ -117,8 +117,8 @@ type DefaultUserEnv struct {
 	FtpDefaultIp   string
 }
 type Environment struct {
-	FtpPort       string
-	FtpsPort      string
+	FtpAddr       string
+	FtpsAddr      string
 	CrtFile       string
 	KeyFile       string
 	FtpServerIPv4 string
@@ -142,26 +142,25 @@ func GetEnv(logger *slog.Logger) (env *Environment, err error) {
 		}
 		// Set a default port if the environment variable is not set
 	}
-	env.FtpPort = os.Getenv("FTP_SERVER_PORT")
-	if env.FtpPort == "" {
+	env.FtpAddr = os.Getenv("FTP_SERVER_ADDR")
+	if env.FtpAddr == "" {
 		// Set a default port if the environment variable is not set
-		env.FtpPort = ":21"
-		fmt.Println("FTP_SERVER_PORT default to :21")
+		env.FtpAddr = ":21"
 	}
-	env.FtpsPort = os.Getenv("FTPS_SERVER_PORT")
-	if env.FtpsPort == "" {
+	env.FtpsAddr = os.Getenv("FTPS_SERVER_ADDR")
+	if env.FtpsAddr == "" {
 		// Set a default port if the environment variable is not set
-		env.FtpsPort = ":990"
-		fmt.Println("FTPS_SERVER_PORT default to :990")
+		env.FtpsAddr = ":990"
 	}
 	env.FtpServerRoot = os.Getenv("FTP_SERVER_ROOT")
 	if env.FtpServerRoot == "" {
 		// Set a default port if the environment variable is not set
 		env.FtpServerRoot = "/static"
-		fmt.Println("FTP_SERVER_ROOT default to /static")
 	}
+
+	logger.Info("FTP_SERVER_ADDR is", "ADDR", env.FtpAddr)
+	logger.Info("FTPS_SERVER_ADDR is", "ADDR", env.FtpsAddr)
 	logger.Info("FTP_SERVER_IPV4 is", "IP", env.FtpServerIPv4)
-	logger.Info("FTP_SERVER_PORT is", "PORT", env.FtpPort)
 	logger.Info("FTP_SERVER_ROOT is", "ROOT", env.FtpServerRoot)
 
 	pasvMinPort := os.Getenv("PASV_MIN_PORT")
