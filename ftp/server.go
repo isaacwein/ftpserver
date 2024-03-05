@@ -124,8 +124,7 @@ func (s *Server) Serve() {
 				return
 			}
 		}
-
-		go s.handleConnection(conn)
+		go s.ftpHandler(conn)
 	}
 }
 

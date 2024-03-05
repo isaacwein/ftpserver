@@ -7,3 +7,5 @@ it will run the app and a ftp client to test the server
 ```bash
 docker compose up
 ```
+
+documentation is in directory [ftp](ftp/README.md)

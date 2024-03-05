@@ -11,16 +11,20 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"time"
 )
 
-func generateSessionID(conn net.Conn) string {
-	// Placeholder: Generate a unique ID for the session
-	return conn.RemoteAddr().String()
+type netConn interface {
+	RemoteAddr() net.Addr
+}
+
+func generateSessionID(conn netConn) string {
+	return fmt.Sprintf("%s-%d", conn.RemoteAddr().String(), time.Now().UnixNano())
 }
 
 type handlerMap map[string]func(cmd string, arg string) error
 
-func (s *Server) handleConnection(conn net.Conn) {
+func (s *Server) ftpHandler(conn net.Conn) {
 	defer func() {
 		if r := recover(); r != nil {
 
@@ -61,45 +65,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	// Send a welcome message
 	fmt.Fprintf(conn, "220 %s\r\n", s.WelcomeMessage)
-	handlers := handlerMap{
-		"AUTH": session.AuthCommand,     // AUTH is used to authenticate the client
-		"USER": session.UserCommand,     // USER is used to specify the username
-		"PASS": session.PassCommand,     // PASS is used to specify the password
-		"SYST": session.SystemCommand,   // SYST is used to get the system type
-		"FEAT": session.FeaturesCommand, // FEAT is used to get the supported features
-		"OPTS": session.OptsCommand,     // OPTS is used to specify options for the server
-		"HELP": session.HelpCommand,     // HELP is used to get help
-		"NOOP": session.NoopCommand,     // NOOP is used to keep the connection alive
-		"QUIT": session.CloseCommand,    // QUIT is used to terminate the connection
-	}
-	handlersSecure := handlerMap{
-		"PWD":  session.PrintWorkingDirectoryCommand,   // PWD is used to print the current working directory
-		"CWD":  session.ChangeDirectoryCommand,         // CWD is used to change the working directory
-		"CDUP": session.ChangeDirectoryToParentCommand, // CDUP is used to change the working directory to the parent directory
-		"REST": session.RessetCommand,                  // REST is used to restart the file transfer
-		"TYPE": session.TypeCommand,                    // TYPE is used to specify the type of file being transferred
-		"MODE": session.ModeCommand,                    // MODE is used to specify the transfer mode (stream, block, or compressed)
-		"PBSZ": session.PbszCommand,                    // PBSZ is used to specify the buffer size to be used for the data channel protection level
-		"PROT": session.PROTCommand,                    // PROT is used to specify the data channel protection level
-		"STRU": session.StruCommand,                    // STRU is used to specify the file structure (file, record, or page)
-		"PASV": session.PassiveModeCommand,             // PASV is used to enter passive mode
-		"EPSV": session.ExtendedPassiveModeCommand,     // EPSV is used to enter extended passive mode
-		"PORT": session.ActiveModeCommand,              // PORT is used to specify an address and port to which the server should connect
-		"EPRT": session.ExtendedActiveModeCommand,      // EPRT is used to specify an address and port to which the server should connect
-		"ABOR": session.AbortCommand,                   // ABOR is used to abort the previous FTP command
-		"MLSD": session.GetDirInfoCommand,              // MLSD is LIST with machine-readable format like $ls -l
-		"MLST": session.GetFileInfoCommand,             // MLST is used to get information about a file
-		"STAT": session.GetFileInfoCommand,             // MLST is used to get information about a file
-		"SIZE": session.SizeCommand,                    // SIZE is used to get the size of a file
-		"STOR": session.SaveCommand,                    // STOR is used to store a file on the server
-		"APPE": session.SaveCommand,                    // APPE is used to append to a file on the server
-		"MDTM": session.ModifyTimeCommand,              // MDTM is used to modify the modification time of a file
-		"RETR": session.RetrieveCommand,                // RETR is used to retrieve a file from the server
-		"DELE": session.RemoveCommand,                  // DELE is used to delete a file
-		"RNFR": session.RenameFromCommand,              // RNFR is used to specify the file to be renamed
-		"RNTO": session.RenameToCommand,                // RNTO is used to specify the new name for the file
-
-	}
+	handlers := session.handlerMap()
+	handlersSecure := session.handlerSecureMap()
 	HelpCommands := make([]string, 0, len(handlers))
 	for k := range handlers {
 		HelpCommands = append(HelpCommands, k)
@@ -136,6 +103,50 @@ func (s *Server) handleConnection(conn net.Conn) {
 		session.UnknownCommand(cmd, arg)
 	}
 
+}
+func (s *Session) handlerMap() handlerMap {
+	return handlerMap{
+		"AUTH": s.AuthCommand,     // AUTH is used to authenticate the client
+		"USER": s.UserCommand,     // USER is used to specify the username
+		"PASS": s.PassCommand,     // PASS is used to specify the password
+		"SYST": s.SystemCommand,   // SYST is used to get the system type
+		"FEAT": s.FeaturesCommand, // FEAT is used to get the supported features
+		"OPTS": s.OptsCommand,     // OPTS is used to specify options for the server
+		"HELP": s.HelpCommand,     // HELP is used to get help
+		"NOOP": s.NoopCommand,     // NOOP is used to keep the connection alive
+		"QUIT": s.CloseCommand,    // QUIT is used to terminate the connection
+	}
+}
+
+func (s *Session) handlerSecureMap() handlerMap {
+	return handlerMap{
+		"PWD":  s.PrintWorkingDirectoryCommand,   // PWD is used to print the current working directory
+		"CWD":  s.ChangeDirectoryCommand,         // CWD is used to change the working directory
+		"CDUP": s.ChangeDirectoryToParentCommand, // CDUP is used to change the working directory to the parent directory
+		"REST": s.RessetCommand,                  // REST is used to restart the file transfer
+		"TYPE": s.TypeCommand,                    // TYPE is used to specify the type of file being transferred
+		"MODE": s.ModeCommand,                    // MODE is used to specify the transfer mode (stream, block, or compressed)
+		"PBSZ": s.PbszCommand,                    // PBSZ is used to specify the buffer size to be used for the data channel protection level
+		"PROT": s.PROTCommand,                    // PROT is used to specify the data channel protection level
+		"STRU": s.StruCommand,                    // STRU is used to specify the file structure (file, record, or page)
+		"PASV": s.PassiveModeCommand,             // PASV is used to enter passive mode
+		"EPSV": s.ExtendedPassiveModeCommand,     // EPSV is used to enter extended passive mode
+		"PORT": s.ActiveModeCommand,              // PORT is used to specify an address and port to which the server should connect
+		"EPRT": s.ExtendedActiveModeCommand,      // EPRT is used to specify an address and port to which the server should connect
+		"ABOR": s.AbortCommand,                   // ABOR is used to abort the previous FTP command
+		"MLSD": s.GetDirInfoCommand,              // MLSD is LIST with machine-readable format like $ls -l
+		"MLST": s.GetFileInfoCommand,             // MLST is used to get information about a file
+		"STAT": s.GetFileInfoCommand,             // MLST is used to get information about a file
+		"SIZE": s.SizeCommand,                    // SIZE is used to get the size of a file
+		"STOR": s.SaveCommand,                    // STOR is used to store a file on the server
+		"APPE": s.SaveCommand,                    // APPE is used to append to a file on the server
+		"MDTM": s.ModifyTimeCommand,              // MDTM is used to modify the modification time of a file
+		"RETR": s.RetrieveCommand,                // RETR is used to retrieve a file from the server
+		"DELE": s.RemoveCommand,                  // DELE is used to delete a file
+		"RNFR": s.RenameFromCommand,              // RNFR is used to specify the file to be renamed
+		"RNTO": s.RenameToCommand,                // RNTO is used to specify the new name for the file
+
+	}
 }
 
 // ParseCommand  parses the command from the client and returns the command and argument.
@@ -196,12 +207,7 @@ func (s *Session) UserCommand(cmd, arg string) (err error) {
 // PassCommand handles the PASS command from the client.
 func (s *Session) PassCommand(cmd, arg string) (err error) {
 
-	RemoteIP, err := netip.ParseAddrPort(s.conn.RemoteAddr().String())
-	if err != nil {
-		err = fmt.Errorf("error parsing remote ip: %w", err)
-		fmt.Fprintf(s.readWriter, "530 Error: %s\r\n", err.Error())
-	}
-	s.userInfo, err = s.ftpServer.users.Find(s.username, arg, RemoteIP.Addr().String())
+	s.userInfo, err = s.ftpServer.users.Find(s.username, arg, s.conn.RemoteAddr().String())
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "530 Error: %s\r\n", err.Error())
 		return err
@@ -215,17 +221,17 @@ func (s *Session) PassCommand(cmd, arg string) (err error) {
 // SystemCommand returns the system type.
 func (s *Session) SystemCommand(cmd, arg string) error {
 	// Use runtime.GOOS to get the operating system name
-	os := runtime.GOOS
+	OS := runtime.GOOS
 
 	// Customize the response based on the operating system
-	switch os {
+	switch OS {
 	case "windows":
 		fmt.Fprintf(s.readWriter, "215 WINDOWS Type: L8\r\n")
 	case "linux", "darwin": // macOS is Unix-based
 		fmt.Fprintf(s.readWriter, "215 UNIX Type: L8\r\n")
 
 	default:
-		fmt.Fprintf(s.readWriter, "215 OS Type: %s\r\n", os)
+		fmt.Fprintf(s.readWriter, "215 OS Type: %s\r\n", OS)
 	}
 	return nil
 }
@@ -558,6 +564,7 @@ func (s *Session) PassiveOrActiveModeConn() (net.Conn, error) {
 	if s.dataCaller != nil {
 		return s.dataCaller, nil
 	}
+
 	return nil, fmt.Errorf("no data connection")
 }
 

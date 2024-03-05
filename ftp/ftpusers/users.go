@@ -33,8 +33,10 @@ func (u *User) FindIP(ip string) bool {
 	if err != nil {
 		return false
 	}
-	for _, v := range u.IPs {
-
+	for k, v := range u.IPs {
+		if k == "*" {
+			return true
+		}
 		if v.Contains(addr) {
 			return true
 		}
@@ -45,7 +47,10 @@ func (u *User) FindIP(ip string) bool {
 // AddIP adds an IP prefix to the user
 // if the ip is without the prefix, it will add /32
 func (u *User) AddIP(ip string) (err error) {
-
+	if ip == "*" {
+		u.IPs["*"] = nil
+		return
+	}
 	var prefix netip.Prefix
 	if !strings.Contains(ip, "/") {
 
@@ -72,6 +77,12 @@ func (u *User) AddIP(ip string) (err error) {
 // RemoveIP removes an IP prefix from the user
 // if the ip is without the prefix, it will add /32
 func (u *User) RemoveIP(ip string) {
+
+	if ip == "*" {
+		delete(u.IPs, "*")
+		return
+	}
+
 	if !strings.Contains(ip, "/") {
 		ip = ip + "/32"
 	}
@@ -113,6 +124,9 @@ func (u *LocalUsers) Find(username, password, ipaddr string) (any, error) {
 	}
 	if userInfo.Password != password {
 		return nil, fmt.Errorf("password is incorrect")
+	}
+	if strings.Contains(ipaddr, ":") {
+		ipaddr = strings.Split(ipaddr, ":")[0]
 	}
 	if !userInfo.FindIP(ipaddr) {
 		return nil, fmt.Errorf("ip origin %s is not allowed", ipaddr)
