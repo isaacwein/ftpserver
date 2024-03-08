@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/telebroad/ftpserver/filesystem"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -17,33 +18,47 @@ const (
 	typeI FTPServerTransferType = "I"
 )
 
+// Users is the interface to find a user by username and password and return it
 type Users interface {
 	// Find returns a user by username and password, if the user is not found it returns an error
 	Find(username, password, ipaddr string) (any, error)
 }
 type Server struct {
-	listener         net.Listener
-	Addr             string
-	supportsTLS      bool
-	FsHandler        FtpFS
-	Root             string
-	sessionManager   *SessionManager
-	users            Users
-	WelcomeMessage   string
+	// listener is the server listener
+	listener net.Listener
+	// Addr is the server address
+	Addr string
+	// supportsTLS is a flag to indicate if the server supports TLS
+	FsHandler filesystem.FtpFS
+	// Root is the server root directory
+	Root string
+	//  sessionManager is the server session manager
+	sessionManager *SessionManager
+	// users is the server users
+	users Users
+	// WelcomeMessage is the server welcome message
+	WelcomeMessage string
+	// PublicServerIPv4 is the server public IPv4 address for passive mode
 	PublicServerIPv4 [4]byte
-	Type             FTPServerTransferType
-	PasvMaxPort      int
-	PasvMinPort      int
-	TLS              *tls.Config
-	TLSe             *tls.Config
-	Closer           chan error
-	ctx              context.Context
-	cancel           context.CancelCauseFunc
-	logger           *slog.Logger
+	// Type is the server transfer type
+	Type FTPServerTransferType
+	// PasvMaxPort is the server passive mode max port
+	PasvMaxPort int
+	// PasvMinPort is the server passive mode min port
+	PasvMinPort int
+	//  TLS is the server TLS configuration
+	TLS *tls.Config
+	// TLSe is the server TLS configuration for upgrade existing FTP connection
+	TLSe *tls.Config
+	// Closer is the server closer channel on close the channel will return the error
+	Closer chan error
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+	logger *slog.Logger
 }
 
 // NewServer creates a new FTP server
-func NewServer(addr string, fsHandler FtpFS, users Users) (*Server, error) {
+func NewServer(addr string, fsHandler filesystem.FtpFS, users Users) (*Server, error) {
 	s := &Server{
 		Addr:           addr,
 		FsHandler:      fsHandler,
@@ -58,10 +73,14 @@ func NewServer(addr string, fsHandler FtpFS, users Users) (*Server, error) {
 	s.ctx, s.cancel = context.WithCancelCause(context.Background())
 	return s, nil
 }
+
+// WithContext sets the server context
 func (s *Server) WithContext(ctx context.Context) *Server {
 	s.ctx, s.cancel = context.WithCancelCause(ctx)
 	return s
 }
+
+// SetPublicServerIPv4 sets the server public IPv4 address
 func (s *Server) SetPublicServerIPv4(publicServerIP string) error {
 	ip, err := netip.ParseAddr(publicServerIP)
 	if err != nil {

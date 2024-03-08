@@ -1,4 +1,4 @@
-package ftpusers
+package users
 
 import (
 	"errors"

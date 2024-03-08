@@ -11,8 +11,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/telebroad/ftpserver/filesystem"
 	"github.com/telebroad/ftpserver/ftp"
-	"github.com/telebroad/ftpserver/ftp/ftpusers"
+	"github.com/telebroad/ftpserver/users"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -40,7 +41,7 @@ func main() {
 	// create a new user
 	users := GetUsers(logger)
 
-	ftpServer, err := ftp.NewServer(env.FtpAddr, ftp.NewFtpLocalFS(env.FtpServerRoot), users)
+	ftpServer, err := ftp.NewServer(env.FtpAddr, filesystem.NewFtpLocalFS(env.FtpServerRoot), users)
 	if err != nil {
 		fmt.Println("Error starting ftp server", "error", err)
 		return
@@ -63,7 +64,7 @@ func main() {
 
 	logger.Info("FTP server started", "port", env.FtpAddr)
 
-	ftpsServer, err := ftp.NewServer(env.FtpsAddr, ftp.NewFtpLocalFS(env.FtpServerRoot), users)
+	ftpsServer, err := ftp.NewServer(env.FtpsAddr, filesystem.NewFtpLocalFS(env.FtpServerRoot), users)
 	err = ftpServer.SetPublicServerIPv4(env.FtpServerIPv4)
 	if err != nil {
 		logger.Error("Error setting public server ip", "error", err)
@@ -90,7 +91,7 @@ func main() {
 
 // GetUsers returns a new ftp.Users with the default user
 func GetUsers(logger *slog.Logger) ftp.Users {
-	Users := ftpusers.NewLocalUsers()
+	Users := users.NewLocalUsers()
 	// load the default user
 	FtpDefaultUser := os.Getenv("FTP_DEFAULT_USER")
 	FtpDefaultPass := os.Getenv("FTP_DEFAULT_PASS")

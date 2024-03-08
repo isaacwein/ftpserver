@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hub.deploy.telebroad.com/ftpserver:latest
+    image: hub.deploy.telebroad.com/fileserver:latest
     ports:
       - "21:21"
       - "990:990"

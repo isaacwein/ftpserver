@@ -12,7 +12,7 @@ COPY go.mod .
 COPY go.sum .
 RUN go get -d -v ./... && go mod tidy
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o ftpserver
+RUN CGO_ENABLED=0 GOOS=linux go build -o fileserver
 
 ENV FTP_SERVER_ROOT=/static
 ENV FTP_SERVER_IPV4=127.0.0.1
