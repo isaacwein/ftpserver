@@ -9,6 +9,7 @@ services:
     ports:
       - "21:21"
       - "990:990"
+      - "22:22"
       - "30000-30099:30000-30099"
     volumes:
       - ./static:/static # host:container
@@ -17,9 +18,10 @@ services:
       FTP_SERVER_IPV4: 127.0.0.1
       PASV_MIN_PORT: 30000
       PASV_MAX_PORT: 30009
-      FTP_DEFAULT_USER: user
+      FTP_DEFAULT_USER: username
       FTP_DEFAULT_PASS: password
       FTP_DEFAULT_IP: 127.0.0.0/8
       CRT_FILE: tls/ssl-rsa/localhost.rsa.crt
       KEY_FILE: tls/ssl-rsa/localhost.rsa.key
+      LOG_LEVER: DEBUG # DEBUG | INFO | WARNING | ERROR, from "log/slog".Level package
     container_name: ftp-server

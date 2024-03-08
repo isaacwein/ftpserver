@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"github.com/telebroad/ftpserver/filesystem"
 	"github.com/telebroad/ftpserver/ftp"
+	"github.com/telebroad/ftpserver/sftp"
 	"github.com/telebroad/ftpserver/users"
 	"log/slog"
 	"os"
@@ -23,12 +24,7 @@ import (
 
 func main() {
 	// setting up the slog logger
-	handlerOptions := &slog.HandlerOptions{
-		AddSource:   true,
-		Level:       slog.LevelDebug, // Only log messages of level INFO and above
-		ReplaceAttr: nil,
-	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, handlerOptions)).With("app", "ftp-server")
+	logger := setupLogger()
 	slog.SetDefault(logger)
 
 	logger.Debug("Starting FTP server")
@@ -39,14 +35,18 @@ func main() {
 	}
 
 	// create a new user
-	users := GetUsers(logger)
+	u := GetUsers(logger)
 
-	ftpServer, err := ftp.NewServer(env.FtpAddr, filesystem.NewFtpLocalFS(env.FtpServerRoot), users)
+	// file system
+	fs := filesystem.NewFtpLocalFS(env.FtpServerRoot)
+
+	// ftp server
+	ftpServer, err := ftp.NewServer(env.FtpAddr, fs, u)
 	if err != nil {
 		fmt.Println("Error starting ftp server", "error", err)
 		return
 	}
-	ftpServer.SetLogger(logger)
+	ftpServer.SetLogger(logger.With("module", "ftp-server"))
 	err = ftpServer.SetPublicServerIPv4(env.FtpServerIPv4)
 	if err != nil {
 		fmt.Println("Error setting public server ip", "error", err)
@@ -64,13 +64,13 @@ func main() {
 
 	logger.Info("FTP server started", "port", env.FtpAddr)
 
-	ftpsServer, err := ftp.NewServer(env.FtpsAddr, filesystem.NewFtpLocalFS(env.FtpServerRoot), users)
+	ftpsServer, err := ftp.NewServer(env.FtpsAddr, fs, u)
 	err = ftpServer.SetPublicServerIPv4(env.FtpServerIPv4)
 	if err != nil {
 		logger.Error("Error setting public server ip", "error", err)
 		return
 	}
-	ftpsServer.SetLogger(logger)
+	ftpsServer.SetLogger(logger.With("module", "ftps-server"))
 	ftpsServer.PasvMinPort = env.PasvMinPort
 	ftpsServer.PasvMaxPort = env.PasvMaxPort
 	err = ftpsServer.TryListenAndServeTLS(env.CrtFile, env.KeyFile, time.Second)
@@ -81,12 +81,48 @@ func main() {
 
 	logger.Info("FTPS server started", "port", env.FtpsAddr)
 
+	// sftp server
+
+	sftpServer := sftp.NewSFTPServer(env.SftpAddr, fs, u)
+
+	sftpServer.SetLogger(logger.With("module", "sftp-server"))
+
+	err = sftpServer.TryListenAndServe(time.Second)
+	if err != nil {
+		logger.Error("Error starting sftp server", "error", err)
+		return
+	}
+
+	// graceful shutdown
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt)
 
 	<-stopChan
-	ftpServer.Close(fmt.Errorf("server closed by signal"))
+	ftpServer.Close(fmt.Errorf("ftp server closed by signal"))
+	ftpsServer.Close(fmt.Errorf("ftps server closed by signal"))
+	sftpServer.Close()
+}
 
+func setupLogger() *slog.Logger {
+	logLevel := slog.LevelInfo
+	switch os.Getenv("LOG_LEVEL") {
+	case "DEBUG":
+		logLevel = slog.LevelDebug
+	case "INFO":
+		logLevel = slog.LevelInfo
+	case "WARN":
+		logLevel = slog.LevelWarn
+	case "ERROR":
+		logLevel = slog.LevelError
+	}
+
+	handlerOptions := &slog.HandlerOptions{
+		AddSource:   true,
+		Level:       logLevel, // Only log messages of level INFO and above
+		ReplaceAttr: nil,
+	}
+
+	return slog.New(slog.NewTextHandler(os.Stdout, handlerOptions)).With("app", "ftp-server")
 }
 
 // GetUsers returns a new ftp.Users with the default user
@@ -96,18 +132,6 @@ func GetUsers(logger *slog.Logger) ftp.Users {
 	FtpDefaultUser := os.Getenv("FTP_DEFAULT_USER")
 	FtpDefaultPass := os.Getenv("FTP_DEFAULT_PASS")
 	FtpDefaultIp := os.Getenv("FTP_DEFAULT_IP")
-
-	if FtpDefaultUser != "" {
-		FtpDefaultUser = "user"
-	}
-
-	if FtpDefaultPass != "" {
-		FtpDefaultPass = "password"
-	}
-
-	if FtpDefaultIp != "" {
-		FtpDefaultIp = "127.0.0.0/8"
-	}
 	logger.Info("FTP_DEFAULT_USER is", "username", FtpDefaultUser)
 	logger.Info("FTP_DEFAULT_PASS is", "password", FtpDefaultPass)
 	logger.Info("FTP_DEFAULT_IP is", "Allowed form origin IP", FtpDefaultIp)
@@ -151,56 +175,23 @@ func GetEnv(logger *slog.Logger) (env *Environment, err error) {
 		// Set a default port if the environment variable is not set
 	}
 	env.FtpAddr = os.Getenv("FTP_SERVER_ADDR")
-	if env.FtpAddr == "" {
-		// Set a default port if the environment variable is not set
-		env.FtpAddr = ":21"
-	}
 	env.FtpsAddr = os.Getenv("FTPS_SERVER_ADDR")
-	if env.FtpsAddr == "" {
-		// Set a default port if the environment variable is not set
-		env.FtpsAddr = ":990"
-	}
 	env.SftpAddr = os.Getenv("SFTP_SERVER_ADDR")
-	if env.SftpAddr == "" {
-		// Set a default port if the environment variable is not set
-		env.SftpAddr = ":22"
-	}
 	env.FtpServerRoot = os.Getenv("FTP_SERVER_ROOT")
-	if env.FtpServerRoot == "" {
-		// Set a default port if the environment variable is not set
-		env.FtpServerRoot = "/static"
-	}
 
 	logger.Info("FTP_SERVER_ADDR is", "ADDR", env.FtpAddr)
 	logger.Info("FTPS_SERVER_ADDR is", "ADDR", env.FtpsAddr)
 	logger.Info("FTP_SERVER_IPV4 is", "IP", env.FtpServerIPv4)
 	logger.Info("FTP_SERVER_ROOT is", "ROOT", env.FtpServerRoot)
 
-	pasvMinPort := os.Getenv("PASV_MIN_PORT")
-	if pasvMinPort == "" {
-		// Set a default port if the environment variable is not set
-		fmt.Println("PASV_MIN_PORT default to 30000")
-		pasvMinPort = "30000"
-	}
-	pasvMaxPort := os.Getenv("PASV_MAX_PORT")
-	if pasvMaxPort == "" {
-		fmt.Println("PASV_MAX_PORT default to 30009")
-		// Set a default port if the environment variable is not set
-		pasvMaxPort = "30009"
-	}
-
 	// convert port string to int
-	env.PasvMinPort, err = strconv.Atoi(pasvMinPort)
-	if err != nil {
-		return nil, fmt.Errorf("error converting PASV_MIN_PORT to int: %w", err)
-	}
+	env.PasvMinPort, _ = strconv.Atoi(os.Getenv("PASV_MIN_PORT"))
 
-	env.PasvMaxPort, err = strconv.Atoi(pasvMaxPort)
-	if err != nil {
-		return nil, fmt.Errorf("error converting PASV_MAX_PORT to int: %w", err)
-	}
+	env.PasvMaxPort, _ = strconv.Atoi(os.Getenv("PASV_MAX_PORT"))
+
 	logger.Info("PASV_MIN_PORT is", "PORT", env.PasvMinPort)
 	logger.Info("PASV_MAX_PORT is", "PORT", env.PasvMaxPort)
+
 	// load the crt and key files
 	env.CrtFile = os.Getenv("CRT_FILE")
 	logger.Info("CRT_FILE is ", env.CrtFile)
