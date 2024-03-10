@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  ftp-server:
+  file-server:
     build:
       context: .
       dockerfile: Dockerfile
@@ -24,4 +24,4 @@ services:
       CRT_FILE: tls/ssl-rsa/localhost.rsa.crt
       KEY_FILE: tls/ssl-rsa/localhost.rsa.key
       LOG_LEVER: DEBUG # DEBUG | INFO | WARNING | ERROR, from "log/slog".Level package
-    container_name: ftp-server
+    container_name: file-server
