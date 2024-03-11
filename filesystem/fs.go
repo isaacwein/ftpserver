@@ -25,8 +25,11 @@ import (
 type FtpFS interface {
 	CheckDir(string) error
 	RootDir() string
-	Dir(string) ([]string, error)
+	Dir(string) ([]string, []os.FileInfo, error)
+
 	Read(string, io.Writer) (int64, error)
+	// File SFTP uses ReadAt to read the file
+	File(fileName string) (*os.File, error)
 	Create(string, io.Reader, string, bool) error
 	Remove(string) error
 	Rename(string, string) error
@@ -65,29 +68,31 @@ func (FS *FtpLocalFS) CheckDir(dirName string) (err error) {
 }
 
 // Dir returns a list of files in the given directory
-func (FS *FtpLocalFS) Dir(dirName string) ([]string, error) {
+func (FS *FtpLocalFS) Dir(dirName string) ([]string, []os.FileInfo, error) {
 
 	dirName, err := FS.cleanPath(dirName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	entries, err := fs.ReadDir(FS.FS, dirName)
 	if err != nil {
-		return nil, fmt.Errorf("error reading directory: %w", err)
+		return nil, nil, fmt.Errorf("error reading directory: %w", err)
 	}
 
-	var lines []string
-	for _, entry := range entries {
+	lines := make([]string, 0, len(entries))
+	fileList := make([]os.FileInfo, 0, len(entries))
+	for i, entry := range entries {
 
-		line, _, err := FS.Stat(filepath.Join(dirName, entry.Name()))
+		line, entry, err := FS.Stat(filepath.Join(dirName, entry.Name()))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		lines = append(lines, line)
+		lines[i] = line
+		fileList[i] = entry
 	}
 
-	return lines, nil
+	return lines, fileList, nil
 }
 
 // Stat returns the file info
@@ -132,6 +137,20 @@ func (FS *FtpLocalFS) Read(name string, w io.Writer) (int64, error) {
 		return n, fmt.Errorf("error reading file: %w", err)
 	}
 	return n, nil
+}
+
+// File reads the file at the given offset and writes it to the given writer
+func (FS *FtpLocalFS) File(fileName string) (*os.File, error) {
+	// Open the file for reading
+	fileName = filepath.Join(FS.localDir, fileName)
+	access := 0
+
+	file, err := os.OpenFile(fileName, access, 0666)
+	if err != nil {
+		return nil, fmt.Errorf("creating file error: %w", err)
+	}
+
+	return file, nil
 }
 
 // Create creates a new file with the given name and writes the data from the reader

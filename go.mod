@@ -5,6 +5,7 @@ go 1.22
 toolchain go1.22.0
 
 require (
+	github.com/lmittmann/tint v1.0.4
 	github.com/pkg/sftp v1.13.6
 	golang.org/x/crypto v0.21.0
 )

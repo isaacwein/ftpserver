@@ -11,6 +11,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/lmittmann/tint"
 	"github.com/telebroad/ftpserver/filesystem"
 	"github.com/telebroad/ftpserver/ftp"
 	"github.com/telebroad/ftpserver/sftp"
@@ -116,13 +117,19 @@ func setupLogger() *slog.Logger {
 		logLevel = slog.LevelError
 	}
 
-	handlerOptions := &slog.HandlerOptions{
+	handlerOptions := &tint.Options{
 		AddSource:   true,
 		Level:       logLevel, // Only log messages of level INFO and above
 		ReplaceAttr: nil,
 	}
 
-	return slog.New(slog.NewTextHandler(os.Stdout, handlerOptions)).With("app", "ftp-server")
+	handler := tint.NewHandler(os.Stdout, handlerOptions)
+
+	logger := slog.New(handler).With("app", "ftp-server")
+	logger.Handler()
+	logger.Info("Logger initialized", "level", logLevel)
+
+	return logger
 }
 
 // GetUsers returns a new ftp.Users with the default user

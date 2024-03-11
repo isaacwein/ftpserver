@@ -672,7 +672,7 @@ func (s *Session) GetDirInfoCommand(cmd, arg string) error {
 	defer dataConn.Close()
 	// Send the directory listing
 	// Send the directory listing
-	entries, err := s.ftpServer.FsHandler.Dir(s.workingDir)
+	entries, _, err := s.ftpServer.FsHandler.Dir(s.workingDir)
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "550 Error getting directory listing. error: %s\r\n", err.Error())
 		return nil
