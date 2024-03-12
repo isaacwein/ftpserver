@@ -5,7 +5,7 @@ package sftp
 // Open (OPEN): Opens a file for reading, writing, or both. The server returns a handle if successful,
 //	which is used in subsequent operations on the file.
 // Close (CLOSE): Closes a file or directory identified by a handle previously returned by the server.
-// Read (READ): Reads data from a file identified by a handle. The request includes the handle, offset, and the number of bytes to read.
+// ReadFile (READ): Reads data from a file identified by a handle. The request includes the handle, offset, and the number of bytes to read.
 // Write (WRITE): Writes data to a file identified by a handle. The request includes the handle, offset, and the data to write.
 // List (READDIR): Reads a directory's contents, returning a list of files and their attributes.
 // Stat (STAT): Retrieves attributes for a file or directory.

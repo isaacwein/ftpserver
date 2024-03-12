@@ -10,13 +10,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/lmittmann/tint"
 	"github.com/telebroad/ftpserver/filesystem"
 	"github.com/telebroad/ftpserver/ftp"
+	"github.com/telebroad/ftpserver/httphandler"
 	"github.com/telebroad/ftpserver/sftp"
 	"github.com/telebroad/ftpserver/users"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -39,7 +42,7 @@ func main() {
 	u := GetUsers(logger)
 
 	// file system
-	fs := filesystem.NewFtpLocalFS(env.FtpServerRoot)
+	fs := filesystem.NewLocalFS(env.FtpServerRoot)
 
 	// ftp server
 	ftpServer, err := ftp.NewServer(env.FtpAddr, fs, u)
@@ -94,6 +97,18 @@ func main() {
 		return
 	}
 
+	router := http.NewServeMux()
+
+	router.Handle("/static/{$}", httphandler.NewFileServerHandler("/static", fs))
+	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "Welcome to the filesystem server")
+	})
+	server := &http.Server{
+		Addr:    os.Getenv("HTTP_SERVER_ADDR"),
+		Handler: router,
+	}
+	go server.ListenAndServe()
 	// graceful shutdown
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt)
@@ -102,6 +117,9 @@ func main() {
 	ftpServer.Close(fmt.Errorf("ftp server closed by signal"))
 	ftpsServer.Close(fmt.Errorf("ftps server closed by signal"))
 	sftpServer.Close()
+	ctx, cancel := context.WithTimeoutCause(context.Background(), 5*time.Second, fmt.Errorf("http server closed by signal"))
+	defer cancel()
+	server.Shutdown(ctx)
 }
 
 func setupLogger() *slog.Logger {
@@ -125,7 +143,7 @@ func setupLogger() *slog.Logger {
 
 	handler := tint.NewHandler(os.Stdout, handlerOptions)
 
-	logger := slog.New(handler).With("app", "ftp-server")
+	logger := slog.New(handler).With("app", "filesystem-server")
 	logger.Handler()
 	logger.Info("Logger initialized", "level", logLevel)
 

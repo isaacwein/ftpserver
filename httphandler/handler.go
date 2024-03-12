@@ -1,11 +1,13 @@
-// http handler to serve filesystem files
+// http-handler handler to serve filesystem files
 
-package http
+package httphandler
 
 import (
 	"fmt"
+	"github.com/telebroad/ftpserver/filesystem"
+	"github.com/telebroad/ftpserver/tools"
 	"io"
-	"io/fs"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
@@ -15,22 +17,44 @@ import (
 	"time"
 )
 
-// FileServer is a http handler to serve filesystem files
+// FileServer is a httphandler handler to serve filesystem files
 type FileServer struct {
 
 	// the virtual directory will ber replaced with the localDir directory to found the local file
 	virtualDir string // The virtual directory to serve
-	localDir   string // The localDir directory to serve
-	localDirFS fs.FS
+	localDirFS filesystem.NewFS
 	mux        *http.ServeMux
+	logger     *slog.Logger
 }
 
-// ServeHTTP serves the http request implementing the http.Handler interface
+func (s *FileServer) SetLogger(l *slog.Logger) {
+	s.logger = l
+}
+func (s *FileServer) Logger() *slog.Logger {
+	if s.logger == nil {
+		s.logger = slog.Default()
+	}
+	return s.logger.With("module", "http-server-handler")
+}
+
+// ServeHTTP serves the httphandler request implementing the httphandler.Handler interface
 func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+	var protocol string
+	if r.TLS == nil {
+		protocol = "http://"
+	} else {
+		protocol = "https://"
+
+	}
+
+	s.Logger().Debug("ServeHTTP", "method", r.Method, "url", protocol+r.Host+r.URL.String(), "remote", r.RemoteAddr, "user-agent", r.UserAgent())
+
+	lw := tools.NewHttpResponseWriter(w, s.Logger())
 
 	switch r.Method {
 	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-		s.mux.ServeHTTP(w, r)
+		s.mux.ServeHTTP(lw, r)
 	case http.MethodOptions:
 		w.Header().Set("Allow", "GET, POST, PUT, PATCH, DELETE")
 		w.WriteHeader(http.StatusOK)
@@ -43,12 +67,12 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *FileServer) localPath(urlPath string) string {
 	// Trim the virtual directory and prepend the localDir directory
 	relativePath := strings.TrimPrefix(urlPath, s.virtualDir)
-	return path.Join(s.localDir, relativePath)
+	return path.Join(s.localDirFS.RootDir(), relativePath)
 }
 
 // Get the file from the localDir directory
 func (s *FileServer) Get(w http.ResponseWriter, r *http.Request) {
-	http.FileServerFS(s.localDirFS).ServeHTTP(w, r)
+	http.FileServerFS(s.localDirFS.GetFS()).ServeHTTP(w, r)
 }
 
 // Post the file to the localDir directory
@@ -133,16 +157,15 @@ func (s *FileServer) Option(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// NewFileServerHandler creates a new http handler to serve filesystem files
-func NewFileServerHandler(pattern, localDir string) http.Handler {
+// NewFileServerHandler creates a new httphandler handler to serve filesystem files
+func NewFileServerHandler(pattern string, localDirFS filesystem.NewFS) http.Handler {
 
 	pattern = strings.TrimSuffix(path.Clean(pattern), "/") + "/"
 
 	s := &FileServer{
 
 		virtualDir: pattern,
-		localDir:   localDir,
-		localDirFS: os.DirFS(localDir),
+		localDirFS: localDirFS,
 		mux:        http.NewServeMux(),
 	}
 

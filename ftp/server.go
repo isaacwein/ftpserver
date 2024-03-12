@@ -23,13 +23,14 @@ type Users interface {
 	// Find returns a user by username and password, if the user is not found it returns an error
 	Find(username, password, ipaddr string) (any, error)
 }
+
 type Server struct {
 	// listener is the server listener
 	listener net.Listener
 	// Addr is the server address
 	Addr string
 	// supportsTLS is a flag to indicate if the server supports TLS
-	FsHandler filesystem.FtpFS
+	FsHandler filesystem.FS
 	// Root is the server root directory
 	Root string
 	//  sessionManager is the server session manager
@@ -58,7 +59,7 @@ type Server struct {
 }
 
 // NewServer creates a new FTP server
-func NewServer(addr string, fsHandler filesystem.FtpFS, users Users) (*Server, error) {
+func NewServer(addr string, fsHandler filesystem.FS, users Users) (*Server, error) {
 	s := &Server{
 		Addr:           addr,
 		FsHandler:      fsHandler,
@@ -286,7 +287,7 @@ func (s *Server) SetLogger(l *slog.Logger) {
 }
 func (s *Server) Logger() *slog.Logger {
 	if s.logger == nil {
-		s.logger = slog.Default().With("module", "ftp-server")
+		s.logger = slog.Default()
 	}
-	return s.logger
+	return s.logger.With("module", "ftp-server")
 }

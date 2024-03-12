@@ -3,6 +3,7 @@ package ftp
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/telebroad/ftpserver/tools"
 	"net"
 	"net/netip"
 	"os"
@@ -33,7 +34,7 @@ func (s *Server) ftpHandler(conn net.Conn) {
 	}()
 	defer conn.Close()
 
-	logWriter := NewBufLogReadWriter(conn, s.Logger())
+	logWriter := tools.NewBufLogReadWriter(conn, s.Logger())
 
 	sessionID := generateSessionID(conn)
 	session := &Session{
@@ -123,6 +124,7 @@ func (s *Session) handlerSecureMap() handlerMap {
 		"PWD":  s.PrintWorkingDirectoryCommand,   // PWD is used to print the current working directory
 		"CWD":  s.ChangeDirectoryCommand,         // CWD is used to change the working directory
 		"CDUP": s.ChangeDirectoryToParentCommand, // CDUP is used to change the working directory to the parent directory
+		"MKD":  s.MakeDirectoryCommand,           // MKD is used to make a new directory
 		"REST": s.RessetCommand,                  // REST is used to restart the file transfer
 		"TYPE": s.TypeCommand,                    // TYPE is used to specify the type of file being transferred
 		"MODE": s.ModeCommand,                    // MODE is used to specify the transfer mode (stream, block, or compressed)
@@ -145,6 +147,7 @@ func (s *Session) handlerSecureMap() handlerMap {
 		"DELE": s.RemoveCommand,                  // DELE is used to delete a file
 		"RNFR": s.RenameFromCommand,              // RNFR is used to specify the file to be renamed
 		"RNTO": s.RenameToCommand,                // RNTO is used to specify the new name for the file
+		"SITE": s.SiteCommand,                    // SITE is used to execute server-specific commands
 
 	}
 }
@@ -186,7 +189,7 @@ func (s *Session) AuthCommand(cmd, arg string) error {
 		fmt.Fprintf(s.readWriter, "500 Server error upgrading to TLS: %s\r\n", err.Error())
 	}
 
-	s.readWriter = NewBufLogReadWriter(s.conn, s.ftpServer.Logger())
+	s.readWriter = tools.NewBufLogReadWriter(s.conn, s.ftpServer.Logger())
 
 	return nil
 }
@@ -244,9 +247,9 @@ func (s *Session) FeaturesCommand(cmd, arg string) error {
 	fmt.Fprintf(s.readWriter, " SIZE\r\n")
 	fmt.Fprintf(s.readWriter, " MDTM\r\n")
 	fmt.Fprintf(s.readWriter, " REST STREAM\r\n")
-	//fmt.Fprintf(s.writer, " TVFS\r\n")
+	fmt.Fprintf(s.readWriter, " TVFS\r\n")
 	fmt.Fprintf(s.readWriter, " EPSV\r\n")
-	//fmt.Fprintf(s.writer, " EPRT\r\n")
+	fmt.Fprintf(s.readWriter, " EPRT\r\n")
 	if s.ftpServer.TLSe != nil {
 		fmt.Fprintf(s.readWriter, " AUTH TLS\r\n")
 		fmt.Fprintf(s.readWriter, " AUTH SSL\r\n")
@@ -315,7 +318,16 @@ func (s *Session) ChangeDirectoryToParentCommand(cmd, arg string) error {
 	fmt.Fprintf(s.readWriter, "250 Directory successfully changed to \"%s\"\r\n", requestedDir)
 	return nil
 }
-
+func (s *Session) MakeDirectoryCommand(cmd, arg string) error {
+	requestedDir := Abs(s.root, s.workingDir, arg)
+	err := s.ftpServer.FsHandler.MakeDir(requestedDir)
+	if err != nil {
+		fmt.Fprintf(s.readWriter, "550 Error: %s\r\n", err.Error())
+		return nil
+	}
+	fmt.Fprintf(s.readWriter, "257 Directory successfully created \"%s\"\r\n", requestedDir)
+	return nil
+}
 func Abs(root string, workingDir string, arg string) string {
 	if len(arg) == 0 {
 		return "."
@@ -622,7 +634,7 @@ func (s *Session) SaveCommand(cmd, arg string) error {
 		appendOnly = true
 	}
 
-	err = s.ftpServer.FsHandler.Create(filename, dataConn, string(s.ftpServer.Type), appendOnly)
+	err = s.ftpServer.FsHandler.WriteFile(filename, dataConn, string(s.ftpServer.Type), appendOnly)
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "550 Error writing to the file: %s\r\n", err.Error())
 		return nil
@@ -664,7 +676,7 @@ func (s *Session) GetDirInfoCommand(cmd, arg string) error {
 	defer s.CloseDataConnection()
 	fmt.Fprintf(s.readWriter, "150 Here comes the directory listing.\r\n")
 	dataConn, err := s.PassiveOrActiveModeConn()
-	dataConnRW := NewBufLogReadWriter(dataConn, s.ftpServer.Logger())
+	dataConnRW := tools.NewBufLogReadWriter(dataConn, s.ftpServer.Logger())
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "425 Can't open data connection: %s\r\n", err.Error())
 		return nil
@@ -755,8 +767,8 @@ func (s *Session) RetrieveCommand(cmd, arg string) error {
 	}
 	defer dataConn.Close()
 	filename := Abs(s.root, s.workingDir, arg)
-	s.ftpServer.Logger().Debug("RETR:", filename)
-	_, err = s.ftpServer.FsHandler.Read(filename, dataConn)
+	s.ftpServer.Logger().Debug("RETR:", "filename", filename)
+	_, err = s.ftpServer.FsHandler.ReadFile(filename, dataConn)
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "550 Error reading the file: %s\r\n", err.Error())
 		return nil
@@ -816,6 +828,48 @@ func (s *Session) RenameToCommand(cmd, arg string) error {
 	return nil
 
 }
+
+func (s *Session) SiteCommand(cmd, arg string) error {
+	args := strings.SplitN(arg, " ", 3)
+	if len(args) == 0 {
+		fmt.Fprintf(s.readWriter, "501 No command given\r\n")
+		return nil
+	}
+
+	if len(args) == 1 && strings.ToUpper(args[0]) == "HELP" {
+		fmt.Fprintf(s.readWriter, "214-The following commands are recognized.\n")
+		fmt.Fprintf(s.readWriter, " CHMOD\n")
+		fmt.Fprintf(s.readWriter, "214 Help OK.\r\n")
+	}
+
+	if len(args) < 3 {
+		fmt.Fprintf(s.readWriter, "501 Not enough arguments\r\n")
+		return nil
+	}
+	switch args[0] {
+
+	case "CHMOD":
+
+		permInt, err := strconv.ParseUint(args[1], 8, 32)
+		if err != nil {
+			fmt.Fprintf(s.readWriter, "501 Error parsing permissions: %s\r\n", err.Error())
+			return nil
+		}
+
+		err = s.ftpServer.FsHandler.SetStat(args[2], uint32(permInt))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(s.readWriter, "200 Permissions changed on file %s.\r\n", args[2])
+	case "CHOWN", "CHGRP", "EXEC":
+		fmt.Fprintf(s.readWriter, "502 Command not implemented: %s\r\n", args[0])
+	default:
+		fmt.Fprintf(s.readWriter, "500 Unknown command: %s\r\n", args[0])
+	}
+	return nil
+
+}
+
 func (s *Session) CloseCommand(cmd, arg string) error {
 	fmt.Fprintf(s.readWriter, "221 Goodbye.\r\n")
 	return nil

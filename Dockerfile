@@ -11,9 +11,10 @@ WORKDIR /fileserver
 COPY ./ftp ./ftp
 COPY ./tls ./tls
 COPY ./filesystem ./filesystem
-COPY ./http ./http
+COPY ./httphandler ./httphandler
 COPY ./sftp ./sftp
 COPY ./users ./users
+COPY ./tools ./tools
 COPY main.go .
 COPY go.mod .
 COPY go.sum .
@@ -26,6 +27,7 @@ ENV FTP_SERVER_IPV4=127.0.0.1
 ENV FTP_SERVER_ADDR=:21
 ENV FTPS_SERVER_ADDR=:990
 ENV SFTP_SERVER_ADDR=:22
+ENV HTTP_SERVER_ADDR=:80
 ENV PASV_MIN_PORT=30000
 ENV PASV_MAX_PORT=30009
 # LOG_LEVER DEBUG | INFO | WARNING | ERROR

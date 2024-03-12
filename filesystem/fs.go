@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// FtpFS is the interface that wraps the basic methods for a FTP file system
+// FS is filesystem the interface that wraps the basic methods for a FTP,FTPS,SFTP file system
 // The FTP server uses this interface to interact with the file system
 // CheckDir checks if the given directory exists
 // RootDir returns the Root directory of the file system
@@ -22,38 +22,85 @@ import (
 // Remove removes the file/directory
 // Rename renames the file/directory or moves it to a different directory
 // Stat returns the file info
-type FtpFS interface {
-	CheckDir(string) error
-	RootDir() string
-	Dir(string) ([]string, []os.FileInfo, error)
+// SetStat changes the file info
+// Lstat returns the file info without following the link
+// Link creates a hard link pointing to a file.
+// Symlink creates a symbolic link pointing to a file or directory.
+type FS interface {
 
-	Read(string, io.Writer) (int64, error)
-	// File SFTP uses ReadAt to read the file
-	File(fileName string) (*os.File, error)
-	Create(string, io.Reader, string, bool) error
-	Remove(string) error
-	Rename(string, string) error
-	Stat(string) (string, fs.FileInfo, error)
+	// RootDir returns the Root directory of the file system
+	RootDir() string
+	// Dir returns a list of files in the given directory
+	Dir(folderName string) ([]string, []os.FileInfo, error)
+	// CheckDir checks if the given directory exists
+	CheckDir(string) error
+	// MakeDir creates a new directory with the given name
+	MakeDir(folderName string) error
+	// ReadFile reads the file and writes it to the given writer
+	ReadFile(string, io.Writer) (int64, error)
+	// WriteFile creates a new file with the given name and writes the data from the reader
+	// filename is the name of the file to create
+	// r is the reader that contains the data to write to the file
+	// transferType is the transfer type "A" for ASCII or "I" for binary
+	// appendOnly is true if the file should be opened in append mode not rewrite mode
+	WriteFile(fileName string, r io.Reader, transferType string, appendOnly bool) error
+	// Remove removes the file
+	// fileName is the name of the file to remove
+	Remove(fileName string) error
+	// Rename renames the file/folder or moves it to a different directory
+	Rename(original string, target string) error
+	// ModifyTime changes the file modification time
 	ModifyTime(string, string) error
+	// Stat returns the file info without following the link
+	Stat(fileName string) (string, fs.FileInfo, error)
+	// SetStat changes the file info
+	SetStat(fileName string, newPermissions uint32) error
+	// Lstat returns the file info without following the link
+	Lstat(fileName string) (string, fs.FileInfo, error)
+	// Link creates a hard link pointing to a file.
+	Link(fileName string, target string) error
+	// Symlink creates a symbolic link pointing to a file or directory.
+	Symlink(fileName string, target string) error
 }
 
-// Ensure that FtpLocalFS implements the FtpFS interface
-var _ FtpFS = &FtpLocalFS{}
+// NewFS implement the FS interface add support for the New 1.16 fs.FS interface
+type NewFS interface {
+	FS
+	// GetFS returns the fs.FS object
+	GetFS() fs.FS
+}
 
-// FtpLocalFS is a local file system that implements the FtpFS interface
-type FtpLocalFS struct {
+// FSWithFile is the interface that wraps the basic methods for a SFTP file system
+type FSWithFile interface {
+	FS
+	// File opens the file and returns a file object
+	// fileName is the name of the file to open
+	File(fileName string) (*os.File, error)
+}
+
+// NewFSWithFile implement the FSWithFile interface add support for the New 1.16 fs.FS interface
+type NewFSWithFile interface {
+	NewFS
+	FSWithFile
+}
+
+// Ensure that LocalFS implements the FtpFS interface
+var _ NewFSWithFile = &LocalFS{}
+
+// LocalFS is a local file system that implements the FtpFS interface
+type LocalFS struct {
 	FS          fs.FS
 	localDir    string // local directory to serve as the ftp virtualRoot
 	virtualRoot string // virtualRoot directory that the server is serving normally it is "/", if its deeper then add it to the system "dir/virtualRoot"
 }
 
 // RootDir returns the Root directory of the file system
-func (FS *FtpLocalFS) RootDir() string {
+func (FS *LocalFS) RootDir() string {
 	return FS.virtualRoot
 }
 
 // CheckDir checks if the given directory exists
-func (FS *FtpLocalFS) CheckDir(dirName string) (err error) {
+func (FS *LocalFS) CheckDir(dirName string) (err error) {
 
 	dirName, err = FS.cleanPath(dirName)
 	if err != nil {
@@ -67,8 +114,12 @@ func (FS *FtpLocalFS) CheckDir(dirName string) (err error) {
 	return
 }
 
+func (FS *LocalFS) GetFS() fs.FS {
+	return FS.FS
+}
+
 // Dir returns a list of files in the given directory
-func (FS *FtpLocalFS) Dir(dirName string) ([]string, []os.FileInfo, error) {
+func (FS *LocalFS) Dir(dirName string) ([]string, []os.FileInfo, error) {
 
 	dirName, err := FS.cleanPath(dirName)
 	if err != nil {
@@ -80,8 +131,8 @@ func (FS *FtpLocalFS) Dir(dirName string) ([]string, []os.FileInfo, error) {
 		return nil, nil, fmt.Errorf("error reading directory: %w", err)
 	}
 
-	lines := make([]string, 0, len(entries))
-	fileList := make([]os.FileInfo, 0, len(entries))
+	lines := make([]string, len(entries))
+	fileList := make([]os.FileInfo, len(entries))
 	for i, entry := range entries {
 
 		line, entry, err := FS.Stat(filepath.Join(dirName, entry.Name()))
@@ -95,34 +146,37 @@ func (FS *FtpLocalFS) Dir(dirName string) ([]string, []os.FileInfo, error) {
 	return lines, fileList, nil
 }
 
-// Stat returns the file info
-func (FS *FtpLocalFS) Stat(fileName string) (string, fs.FileInfo, error) {
-
-	fileName, err := FS.cleanPath(fileName)
+// MakeDir creates a new directory with the given name
+func (FS *LocalFS) MakeDir(folderName string) error {
+	folderName, err := FS.cleanPath(folderName)
 	if err != nil {
-		return "", nil, err
+		return err
 	}
+	folderName = filepath.Join(FS.localDir, folderName)
 
-	info, err := fs.Stat(FS.FS, fileName)
+	err = os.MkdirAll(folderName, 0777)
 	if err != nil {
-		return "", nil, fmt.Errorf("error getting file info: %w", err)
+		return fmt.Errorf("error creating directory: %w", err)
 	}
-	fileType := "file"
-	if info.IsDir() {
-		fileType = "dir"
-	}
-
-	mode := info.Mode()
-	size := info.Size()
-	modTime := info.ModTime().UTC().Format("20060102150405")
-	// FTP format: permissions, number of links, owner, group, size, modification time, name
-	return fmt.Sprintf("Type=%s;Size=%d;Modify=%s;Perm=%s;UNIX.ownername=%s;UNIX.groupname=%s; %s",
-		fileType, size, modTime, mode.String(), "owner", "group",
-		info.Name()), info, nil
+	return nil
 }
 
-// Read reads the file and writes it to the given writer
-func (FS *FtpLocalFS) Read(name string, w io.Writer) (int64, error) {
+// File reads the file at the given offset and writes it to the given writer
+func (FS *LocalFS) File(fileName string) (*os.File, error) {
+	// Open the file for reading
+	fileName = filepath.Join(FS.localDir, fileName)
+	access := 0
+
+	file, err := os.OpenFile(fileName, access, 0666)
+	if err != nil {
+		return nil, fmt.Errorf("creating file error: %w", err)
+	}
+
+	return file, nil
+}
+
+// ReadFile reads the file and writes it to the given writer
+func (FS *LocalFS) ReadFile(name string, w io.Writer) (int64, error) {
 	// Open the file for reading
 	if len(name) > 0 && name[0] == '/' {
 		name = name[1:]
@@ -139,22 +193,8 @@ func (FS *FtpLocalFS) Read(name string, w io.Writer) (int64, error) {
 	return n, nil
 }
 
-// File reads the file at the given offset and writes it to the given writer
-func (FS *FtpLocalFS) File(fileName string) (*os.File, error) {
-	// Open the file for reading
-	fileName = filepath.Join(FS.localDir, fileName)
-	access := 0
-
-	file, err := os.OpenFile(fileName, access, 0666)
-	if err != nil {
-		return nil, fmt.Errorf("creating file error: %w", err)
-	}
-
-	return file, nil
-}
-
-// Create creates a new file with the given name and writes the data from the reader
-func (FS *FtpLocalFS) Create(fileName string, r io.Reader, transferType string, appendOnly bool) error {
+// WriteFile creates a new file with the given name and writes the data from the reader
+func (FS *LocalFS) WriteFile(fileName string, r io.Reader, transferType string, appendOnly bool) error {
 
 	fileName = filepath.Join(FS.localDir, fileName)
 	access := 0
@@ -194,7 +234,7 @@ func (FS *FtpLocalFS) Create(fileName string, r io.Reader, transferType string, 
 }
 
 // Remove removes the file
-func (FS *FtpLocalFS) Remove(fileName string) (err error) {
+func (FS *LocalFS) Remove(fileName string) (err error) {
 	fileName, err = FS.cleanPath(fileName)
 	if err != nil {
 		return err
@@ -210,7 +250,7 @@ func (FS *FtpLocalFS) Remove(fileName string) (err error) {
 }
 
 // Rename renames the file or moves it to a different directory
-func (FS *FtpLocalFS) Rename(fileName, newName string) (err error) {
+func (FS *LocalFS) Rename(fileName, newName string) (err error) {
 	fileName, err = FS.cleanPath(fileName)
 	if err != nil {
 		return err
@@ -220,6 +260,7 @@ func (FS *FtpLocalFS) Rename(fileName, newName string) (err error) {
 	if err != nil {
 		return err
 	}
+
 	fileName = filepath.Join(FS.localDir, fileName)
 	newName = filepath.Join(FS.localDir, newName)
 
@@ -233,7 +274,7 @@ func (FS *FtpLocalFS) Rename(fileName, newName string) (err error) {
 }
 
 // ModifyTime changes the file modification time
-func (FS *FtpLocalFS) ModifyTime(filePath string, newTime string) (err error) {
+func (FS *LocalFS) ModifyTime(filePath string, newTime string) (err error) {
 	filePath, err = FS.cleanPath(filePath)
 	if err != nil {
 		return err
@@ -256,13 +297,104 @@ func (FS *FtpLocalFS) ModifyTime(filePath string, newTime string) (err error) {
 	return
 }
 
-// Lstat returns the file info without following the link
-func (FS *FtpLocalFS) Lstat() {
+// Stat returns the file info
+func (FS *LocalFS) Stat(fileName string) (string, fs.FileInfo, error) {
 
+	fileName, err := FS.cleanPath(fileName)
+	if err != nil {
+		return "", nil, err
+	}
+
+	info, err := fs.Stat(FS.FS, fileName)
+	if err != nil {
+		return "", nil, fmt.Errorf("error getting file info: %w", err)
+	}
+	fileType := "file"
+	if info.IsDir() {
+		fileType = "dir"
+	}
+
+	mode := info.Mode()
+	size := info.Size()
+	modTime := info.ModTime().UTC().Format("20060102150405")
+	// FTP format: permissions, number of links, owner, group, size, modification time, name
+	return fmt.Sprintf("Type=%s;Size=%d;Modify=%s;Perm=%s;UNIX.ownername=%s;UNIX.groupname=%s; %s",
+		fileType, size, modTime, mode.String(), "owner", "group",
+		info.Name()), info, nil
+}
+func (FS *LocalFS) SetStat(fileName string, newPermissions uint32) error {
+	fileName, err := FS.cleanPath(fileName)
+	if err != nil {
+		return err
+	}
+	fileName = filepath.Join(FS.localDir, fileName)
+	if newPermissions == 0 {
+		return errors.New("invalid permissions")
+	}
+	newPermission := os.FileMode(newPermissions)
+	err = os.Chmod(fileName, newPermission)
+	if err != nil {
+		return fmt.Errorf("error changing file permissions: %w", err)
+	}
+	return nil
+}
+func (FS *LocalFS) Lstat(fileName string) (string, fs.FileInfo, error) {
+	fileName, err := FS.cleanPath(fileName)
+	if err != nil {
+		return "", nil, err
+	}
+	fileName = filepath.Join(FS.localDir, fileName)
+	info, err := os.Lstat(fileName)
+	if err != nil {
+		return "", nil, fmt.Errorf("error getting file info: %w", err)
+	}
+
+	fileType := "file"
+	if info.IsDir() {
+		fileType = "dir"
+	}
+
+	mode := info.Mode()
+	size := info.Size()
+	modTime := info.ModTime().UTC().Format("20060102150405")
+	// FTP format: permissions, number of links, owner, group, size, modification time, name
+	return fmt.Sprintf("Type=%s;Size=%d;Modify=%s;Perm=%s;UNIX.ownername=%s;UNIX.groupname=%s; %s",
+		fileType, size, modTime, mode.String(), "owner", "group",
+		info.Name()), info, nil
 }
 
-func NewFtpLocalFS(localDir string) *FtpLocalFS {
-	ftpLocalFS := &FtpLocalFS{
+// Link creates a hard link pointing to a file.
+func (FS *LocalFS) Link(fileName string, target string) (err error) {
+	fileName, err = FS.cleanPath(fileName)
+	if err != nil {
+		return fmt.Errorf("error cleaning filname path: %w", err)
+	}
+	fileName = filepath.Join(FS.localDir, fileName)
+	target, err = FS.cleanPath(target)
+	if err != nil {
+		return fmt.Errorf("error cleaning target path: %w", err)
+	}
+	target = filepath.Join(FS.localDir, target)
+	return os.Link(target, fileName)
+}
+
+// Symlink creates a symbolic link pointing to a file or directory.
+func (FS *LocalFS) Symlink(fileName string, target string) (err error) {
+	fileName, err = FS.cleanPath(fileName)
+	if err != nil {
+		return fmt.Errorf("error cleaning filname path: %w", err)
+	}
+	fileName = filepath.Join(FS.localDir, fileName)
+	target, err = FS.cleanPath(target)
+	if err != nil {
+		return err
+	}
+	target = filepath.Join(FS.localDir, target)
+	return os.Symlink(target, fileName)
+}
+
+func NewLocalFS(localDir string) *LocalFS {
+	ftpLocalFS := &LocalFS{
 		localDir:    localDir,
 		virtualRoot: "/",
 		FS:          os.DirFS(localDir),
@@ -271,7 +403,7 @@ func NewFtpLocalFS(localDir string) *FtpLocalFS {
 }
 
 // securePath ensures that the given path is safe to use its dont allow to go outside the virtualRoot directory
-func (FS *FtpLocalFS) securePath(pathName string) (string, error) {
+func (FS *LocalFS) securePath(pathName string) (string, error) {
 	cleaned := filepath.Clean(pathName)
 	relPath, err := filepath.Rel(FS.virtualRoot, filepath.Join(FS.virtualRoot, cleaned))
 	if err != nil {
@@ -293,7 +425,7 @@ func (FS *FtpLocalFS) securePath(pathName string) (string, error) {
 }
 
 // cleanPath call securePath and then clean the path to be used
-func (FS *FtpLocalFS) cleanPath(pathName string) (string, error) {
+func (FS *LocalFS) cleanPath(pathName string) (string, error) {
 
 	pathName, err := FS.securePath(pathName)
 	if err != nil {
