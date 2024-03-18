@@ -194,12 +194,7 @@ func (s *Server) sshHandler(conn net.Conn) {
 		// Start an SFTP session.
 		go s.filterHandler(requests)
 
-		serverOptions := []sftp.RequestServerOption{
-			func(s *sftp.RequestServer) {
-				// logs all sftp commands to stdout
-				s.Reader = io.TeeReader(s.Reader, os.Stdout)
-			},
-		}
+		serverOptions := []sftp.RequestServerOption{}
 
 		FS := NewFileSys(s.fsFileRoot, s.logger)
 		s.sftpServer = sftp.NewRequestServer(channel, FS, serverOptions...)
