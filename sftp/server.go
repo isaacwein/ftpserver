@@ -5,6 +5,7 @@ import (
 	"github.com/pkg/sftp"
 	"github.com/telebroad/ftpserver/filesystem"
 	"github.com/telebroad/ftpserver/ftp"
+	"github.com/telebroad/ftpserver/tools"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"log/slog"
@@ -169,7 +170,7 @@ func (s *Server) sshHandler(conn net.Conn) {
 		"ClientVersion", string(sshConn.ClientVersion()),
 		"ServerVersion", string(sshConn.ServerVersion()),
 		"ssh-User", sshConn.User(),
-		"SessionID", string(sshConn.SessionID()),
+		"SessionID", tools.IsPrintable(sshConn.SessionID()),
 	)
 	// The incoming Request channel must be serviced.
 	go ssh.DiscardRequests(reqs)
@@ -214,7 +215,7 @@ func (s *Server) sshHandler(conn net.Conn) {
 // Start an SFTP session.
 func (s *Server) filterHandler(in <-chan *ssh.Request) {
 	for req := range in {
-		s.Logger().Debug("Request", "type", req.Type, "payload", string(req.Payload))
+		s.Logger().Debug("Request", "type", req.Type, "payload", tools.IsPrintable(string(req.Payload)))
 
 		ok := false
 		switch req.Type {

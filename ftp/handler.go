@@ -289,7 +289,7 @@ func (s *Session) PrintWorkingDirectoryCommand(cmd, arg string) error {
 func (s *Session) ChangeDirectoryCommand(cmd, arg string) error {
 
 	requestedDir := Abs(s.root, s.workingDir, arg)
-	fmt.Println("requestedDir:", requestedDir)
+
 	err := s.ftpServer.FsHandler.CheckDir(requestedDir)
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "550 Error: %s\r\n", err.Error())
@@ -307,7 +307,7 @@ func (s *Session) ChangeDirectoryCommand(cmd, arg string) error {
 func (s *Session) ChangeDirectoryToParentCommand(cmd, arg string) error {
 
 	requestedDir := Abs(s.root, s.workingDir, "..")
-	fmt.Println("requestedDir:", requestedDir)
+
 	err := s.ftpServer.FsHandler.CheckDir(requestedDir)
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "550 Error: %s\r\n", err.Error())
@@ -856,7 +856,7 @@ func (s *Session) SiteCommand(cmd, arg string) error {
 			return nil
 		}
 
-		err = s.ftpServer.FsHandler.SetStat(args[2], uint32(permInt))
+		err = s.ftpServer.FsHandler.SetStat(args[2], os.FileMode(permInt))
 		if err != nil {
 			return err
 		}

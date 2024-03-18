@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/pkg/sftp"
 	"github.com/telebroad/ftpserver/filesystem"
+	"github.com/telebroad/ftpserver/tools"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"io/fs"
@@ -31,9 +32,10 @@ func NewFileSys(FS filesystem.FSWithFile, logger *slog.Logger) sftp.Handlers {
 		FileCmd:  v,
 		FileList: v,
 	}
+
 }
 
-func (s *Server) sftpHandler(channel ssh.Channel, conn *ssh.ServerConn) {
+func (s *Server) sftpHandler(channel ssh.Channel) {
 	reader := bufio.NewReader(channel)
 
 	for {
@@ -54,13 +56,18 @@ func (s *FileSys) Filewrite(request *sftp.Request) (io.WriterAt, error) {
 	return s.OpenFile(request)
 }
 func (s *FileSys) OpenFile(request *sftp.Request) (sftp.WriterAtReaderAt, error) {
+
 	s.logger.Debug("FileWrite",
 		"request.Method:", request.Method,
 		"request.Filepath:", request.Filepath,
-		"request.Attrs:", string(request.Attrs),
+		"request.Attrs:", tools.IsPrintable(request.Attrs),
 		"request.Flags:", request.Flags,
 		"request.Target:", request.Target,
 	)
+	if request.Method == "Put" {
+		// Adjust the flags to ensure file creation
+		request.Flags |= uint32(os.O_CREATE)
+	}
 	file, err := s.fs.File(request.Filepath, request.Flags)
 
 	if err != nil {
@@ -72,14 +79,14 @@ func (s *FileSys) Filecmd(request *sftp.Request) error {
 	s.logger.Debug("Filecmd",
 		"request.Method:", request.Method,
 		"request.Filepath:", request.Filepath,
-		"request.Attrs:", string(request.Attrs),
+		"request.Attrs:", tools.IsPrintable(request.Attrs),
 		"request.Flags:", request.Flags,
 		"request.Target:", request.Target,
 	)
 	switch request.Method {
-	case "Setstat":
+	case "Setstat", "chmod", "chown", "chgrp":
 
-		err := s.fs.SetStat(request.Filepath, request.Flags)
+		err := s.fs.SetStat(request.Filepath, request.Attributes().FileMode())
 		if err != nil {
 			return err
 		}
@@ -88,12 +95,7 @@ func (s *FileSys) Filecmd(request *sftp.Request) error {
 	case "Rename":
 		// SFTP-v2: "It is an error if there already exists a file with the name specified by newpath."
 		// This varies from the POSIX specification, which allows limited replacement of target files.
-
-		if _, _, err := s.fs.Stat(request.Target); err == nil {
-			return fs.ErrExist
-		}
-
-		return s.fs.Rename(request.Filepath, request.Target)
+		return s.PosixRename(request)
 
 	case "Rmdir":
 
@@ -123,6 +125,33 @@ func (s *FileSys) Filecmd(request *sftp.Request) error {
 
 	return errors.New("unsupported")
 }
+func (s *FileSys) PosixRename(request *sftp.Request) error {
+	s.logger.Debug("Filecmd",
+		"request.Method:", request.Method,
+		"request.Filepath:", request.Filepath,
+		"request.Attrs:", tools.IsPrintable(request.Attrs),
+		"request.Flags:", request.Flags,
+		"request.Target:", request.Target,
+	)
+	_, _, err := s.fs.Stat(request.Target)
+	if err == nil {
+		return fs.ErrExist
+	}
+
+	return s.fs.Rename(request.Filepath, request.Target)
+}
+
+func (s *FileSys) StatVFS(request *sftp.Request) (*sftp.StatVFS, error) {
+	s.logger.Debug("Filecmd",
+		"request.Method:", request.Method,
+		"request.Filepath:", request.Filepath,
+		"request.Attrs:", tools.IsPrintable(request.Attrs),
+		"request.Flags:", request.Flags,
+		"request.Target:", request.Target,
+	)
+
+	return s.fs.StatFS(request.Filepath)
+}
 
 type ListerAt []os.FileInfo
 
@@ -140,9 +169,34 @@ func (f ListerAt) ListAt(ls []os.FileInfo, offset int64) (int, error) {
 }
 
 func (s *FileSys) Filelist(request *sftp.Request) (sftp.ListerAt, error) {
-	_, entries, err := s.fs.Dir(request.Filepath)
-	if err != nil {
-		return nil, err
+	s.logger.Debug("Filelist",
+		"request.Method:", request.Method,
+		"request.Filepath:", request.Filepath,
+		"request.Attrs:", tools.IsPrintable(request.Attrs),
+		"request.Flags:", request.Flags,
+		"request.Target:", request.Target,
+	)
+	var entries []os.FileInfo
+	var err error
+	switch request.Method {
+	case "List":
+		_, entries, err = s.fs.Dir(request.Filepath)
+		if err != nil {
+			return nil, fmt.Errorf("fileList error: %w", err)
+		}
+	case "Stat":
+		_, entrie, err := s.fs.Stat(request.Filepath)
+		if err != nil {
+			return nil, fmt.Errorf("fileStat error: %w", err)
+		}
+		entries = []os.FileInfo{entrie}
+	case "Lstat":
+		_, entrie, err := s.fs.Lstat(request.Filepath)
+		if err != nil {
+			return nil, fmt.Errorf("lstat error: %w", err)
+		}
+		entries = []os.FileInfo{entrie}
+
 	}
 
 	return ListerAt(entries), nil

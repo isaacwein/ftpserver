@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/pkg/sftp"
+	"golang.org/x/sys/unix"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -54,7 +57,7 @@ type FS interface {
 	// Stat returns the file info without following the link
 	Stat(fileName string) (string, fs.FileInfo, error)
 	// SetStat changes the file info
-	SetStat(fileName string, newPermissions uint32) error
+	SetStat(fileName string, newPermissions os.FileMode) error
 	// Lstat returns the file info without following the link
 	Lstat(fileName string) (string, fs.FileInfo, error)
 	// Link creates a hard link pointing to a file.
@@ -76,6 +79,9 @@ type FSWithFile interface {
 	// File opens the file and returns a file object
 	// fileName is the name of the file to open
 	File(fileName string, access uint32) (*os.File, error)
+
+	// StatFS FileStatFS returns the file system status of the file system containing the file
+	StatFS(path string) (*sftp.StatVFS, error)
 }
 
 // NewFSWithFile implement the FSWithFile interface add support for the New 1.16 fs.FS interface
@@ -171,6 +177,7 @@ func (FS *LocalFS) File(fileName string, access uint32) (*os.File, error) {
 
 	// Open the file for reading
 	fileName = filepath.Join(FS.localDir, fileName)
+	fmt.Printf("os.O_RDWR|os.O_CREATE,fileName: %x %x %x %s %x %x\n", os.O_RDWR|os.O_CREATE, os.O_RDWR, os.O_CREATE, "access", int(access), access)
 
 	file, err := os.OpenFile(fileName, int(access), 0666)
 	if err != nil {
@@ -330,22 +337,23 @@ func (FS *LocalFS) Stat(fileName string) (string, fs.FileInfo, error) {
 		fileType, size, modTime, mode.String(), "owner", "group",
 		info.Name()), info, nil
 }
-func (FS *LocalFS) SetStat(fileName string, newPermissions uint32) error {
+
+// SetStat changes the file info
+func (FS *LocalFS) SetStat(fileName string, newPermission os.FileMode) error {
 	fileName, err := FS.cleanPath(fileName)
 	if err != nil {
 		return err
 	}
 	fileName = filepath.Join(FS.localDir, fileName)
-	if newPermissions == 0 {
-		return errors.New("invalid permissions")
-	}
-	newPermission := os.FileMode(newPermissions)
+
 	err = os.Chmod(fileName, newPermission)
 	if err != nil {
 		return fmt.Errorf("error changing file permissions: %w", err)
 	}
 	return nil
 }
+
+// Lstat returns the file info without following the link
 func (FS *LocalFS) Lstat(fileName string) (string, fs.FileInfo, error) {
 	fileName, err := FS.cleanPath(fileName)
 	if err != nil {
@@ -399,6 +407,54 @@ func (FS *LocalFS) Symlink(fileName string, target string) (err error) {
 	}
 	target = filepath.Join(FS.localDir, target)
 	return os.Symlink(target, fileName)
+}
+
+// StatFS FileStatFS returns the file system status of the file system containing the file
+func (FS *LocalFS) StatFS(path string) (*sftp.StatVFS, error) {
+	var stat unix.Statfs_t
+
+	err := unix.Statfs(path, &stat)
+	if err != nil {
+		err = fmt.Errorf("error getting file system info: %w", err)
+		return nil, err
+	}
+	var sftpStatVFS *sftp.StatVFS
+
+	switch runtime.GOOS {
+	case "linux":
+		sftpStatVFS = &sftp.StatVFS{
+			Bsize:   uint64(stat.Bsize),
+			Frsize:  uint64(stat.Frsize),
+			Blocks:  stat.Blocks,
+			Bfree:   stat.Bfree,
+			Bavail:  stat.Bavail,
+			Files:   stat.Files,
+			Ffree:   stat.Ffree,
+			Favail:  stat.Ffree,         // not sure how to calculate Favail
+			Flag:    uint64(stat.Flags), // assuming POSIX?
+			Namemax: uint64(stat.Namelen),
+		}
+	case "darwin":
+
+		sftpStatVFS = &sftp.StatVFS{
+			Bsize:   uint64(stat.Bsize),
+			Frsize:  uint64(stat.Bsize), // fragment size is a linux thing; use block size here
+			Blocks:  stat.Blocks,
+			Bfree:   stat.Bfree,
+			Bavail:  stat.Bavail,
+			Files:   stat.Files,
+			Ffree:   stat.Ffree,
+			Favail:  stat.Ffree,                                              // not sure how to calculate Favail
+			Fsid:    uint64(stat.Fsid.Val[1])<<32 | uint64(stat.Fsid.Val[0]), // endianness?
+			Flag:    uint64(stat.Flags),                                      // assuming POSIX?
+			Namemax: 1024,                                                    // man 2 statfs shows: #define MAXPATHLEN      1024
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+
+	return sftpStatVFS, nil
 }
 
 func NewLocalFS(localDir string) *LocalFS {
