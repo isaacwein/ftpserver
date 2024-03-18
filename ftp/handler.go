@@ -855,10 +855,12 @@ func (s *Session) SiteCommand(cmd, arg string) error {
 			fmt.Fprintf(s.readWriter, "501 Error parsing permissions: %s\r\n", err.Error())
 			return nil
 		}
-
-		err = s.ftpServer.FsHandler.SetStat(args[2], os.FileMode(permInt))
+		fmt.Println("args[2]", args[1], permInt)
+		err = s.ftpServer.FsHandler.SetStat(filepath.Join(s.workingDir, args[2]), os.FileMode(uint32(permInt)))
 		if err != nil {
-			return err
+			err = fmt.Errorf("550 Error changing permissions: %s", err.Error())
+			fmt.Fprintf(s.readWriter, "%s\r\n", err.Error())
+			return nil
 		}
 		fmt.Fprintf(s.readWriter, "200 Permissions changed on file %s.\r\n", args[2])
 	case "CHOWN", "CHGRP", "EXEC":
