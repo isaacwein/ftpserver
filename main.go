@@ -90,7 +90,11 @@ func main() {
 	sftpServer := sftp.NewSFTPServer(env.SftpAddr, fs, u)
 
 	sftpServer.SetLogger(logger.With("module", "sftp-server"))
-
+	err = sftpServer.SetPrivateKeyFile(env.KeyFile)
+	if err != nil {
+		logger.Error("Error setting private key", "error", err)
+		return
+	}
 	err = sftpServer.TryListenAndServe(time.Second)
 	if err != nil {
 		logger.Error("Error starting sftp server", "error", err)

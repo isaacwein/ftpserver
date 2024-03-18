@@ -10,8 +10,9 @@ services:
       - "8080:80" # host:container
       - "21:21"
       - "990:990"
-      - "22:22"
       - "30000-30099:30000-30099"
+      - "22:22"
+
     volumes:
       - ./static:/static # host:container
     environment:

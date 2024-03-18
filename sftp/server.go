@@ -42,6 +42,17 @@ func (s *Server) SetPrivateKey(pk []byte) {
 	s.PrivateKey = pk
 }
 
+func (s *Server) SetPrivateKeyFile(pk string) error {
+	file, err := os.ReadFile(pk)
+	if err != nil {
+		err = fmt.Errorf("error reading private key file: %w", err)
+		return err
+	}
+
+	s.PrivateKey = file
+	return nil
+}
+
 func (s *Server) ListenAndServe() error {
 
 	// Generate a new key pair if not set.
@@ -182,13 +193,6 @@ func (s *Server) sshHandler(conn net.Conn) {
 
 		// Start an SFTP session.
 		go s.filterHandler(requests)
-		//serverOptions1 := []sftp.ServerOption{
-		//	sftp.WithServerWorkingDirectory(os.Getenv("FTP_SERVER_ROOT")),
-		//	sftp.WithDebug(os.Stdout),
-		//	func(s *sftp.Server) error {
-		//		s.
-		//	},
-		//}
 
 		serverOptions := []sftp.RequestServerOption{
 			func(s *sftp.RequestServer) {

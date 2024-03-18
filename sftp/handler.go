@@ -61,7 +61,7 @@ func (s *FileSys) OpenFile(request *sftp.Request) (sftp.WriterAtReaderAt, error)
 		"request.Flags:", request.Flags,
 		"request.Target:", request.Target,
 	)
-	file, err := s.fs.File(request.Filepath)
+	file, err := s.fs.File(request.Filepath, request.Flags)
 
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %w", err)

@@ -75,7 +75,7 @@ type FSWithFile interface {
 	FS
 	// File opens the file and returns a file object
 	// fileName is the name of the file to open
-	File(fileName string) (*os.File, error)
+	File(fileName string, access uint32) (*os.File, error)
 }
 
 // NewFSWithFile implement the FSWithFile interface add support for the New 1.16 fs.FS interface
@@ -162,12 +162,17 @@ func (FS *LocalFS) MakeDir(folderName string) error {
 }
 
 // File reads the file at the given offset and writes it to the given writer
-func (FS *LocalFS) File(fileName string) (*os.File, error) {
+func (FS *LocalFS) File(fileName string, access uint32) (*os.File, error) {
+
+	fileName, err := FS.cleanPath(fileName)
+	if err != nil {
+		return nil, err
+	}
+
 	// Open the file for reading
 	fileName = filepath.Join(FS.localDir, fileName)
-	access := 0
 
-	file, err := os.OpenFile(fileName, access, 0666)
+	file, err := os.OpenFile(fileName, int(access), 0666)
 	if err != nil {
 		return nil, fmt.Errorf("creating file error: %w", err)
 	}
@@ -195,7 +200,10 @@ func (FS *LocalFS) ReadFile(name string, w io.Writer) (int64, error) {
 
 // WriteFile creates a new file with the given name and writes the data from the reader
 func (FS *LocalFS) WriteFile(fileName string, r io.Reader, transferType string, appendOnly bool) error {
-
+	fileName, err := FS.cleanPath(fileName)
+	if err != nil {
+		return err
+	}
 	fileName = filepath.Join(FS.localDir, fileName)
 	access := 0
 	if appendOnly {
