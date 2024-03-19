@@ -1,4 +1,4 @@
-module github.com/telebroad/ftpserver
+module github.com/telebroad/fileserver
 
 go 1.22
 
