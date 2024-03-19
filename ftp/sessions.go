@@ -1,7 +1,7 @@
 package ftp
 
 import (
-	"github.com/telebroad/ftpserver/tools"
+	"github.com/telebroad/fileserver/tools"
 	"net"
 	"sync"
 )

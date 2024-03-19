@@ -3,7 +3,7 @@ package ftp
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/telebroad/ftpserver/tools"
+	"github.com/telebroad/fileserver/tools"
 	"net"
 	"net/netip"
 	"os"

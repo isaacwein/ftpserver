@@ -18,8 +18,8 @@ example setting basic user [users](users/README.md)
 package main
 
 import (
-	"github.com/telebroad/ftpserver/ftp"
-	"github.com/telebroad/ftpserver/users"
+	"github.com/telebroad/fileserver/ftp"
+	"github.com/telebroad/fileserver/users"
 	"log/slog"
 	"os"
 )

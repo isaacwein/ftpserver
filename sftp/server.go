@@ -3,9 +3,9 @@ package sftp
 import (
 	"fmt"
 	"github.com/pkg/sftp"
-	"github.com/telebroad/ftpserver/filesystem"
-	"github.com/telebroad/ftpserver/ftp"
-	"github.com/telebroad/ftpserver/tools"
+	"github.com/telebroad/fileserver/filesystem"
+	"github.com/telebroad/fileserver/ftp"
+	"github.com/telebroad/fileserver/tools"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"log/slog"

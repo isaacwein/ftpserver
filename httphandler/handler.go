@@ -4,8 +4,8 @@ package httphandler
 
 import (
 	"fmt"
-	"github.com/telebroad/ftpserver/filesystem"
-	"github.com/telebroad/ftpserver/tools"
+	"github.com/telebroad/fileserver/filesystem"
+	"github.com/telebroad/fileserver/tools"
 	"io"
 	"log/slog"
 	"mime"

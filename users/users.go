@@ -3,7 +3,7 @@ package users
 import (
 	"errors"
 	"fmt"
-	"github.com/telebroad/ftpserver/ftp"
+	"github.com/telebroad/fileserver/ftp"
 	"net/netip"
 	"strings"
 	"sync"

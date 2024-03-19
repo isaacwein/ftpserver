@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/telebroad/ftpserver/filesystem"
+	"github.com/telebroad/fileserver/filesystem"
 	"log/slog"
 	"net"
 	"net/netip"
