@@ -177,7 +177,6 @@ func (FS *LocalFS) File(fileName string, access uint32) (*os.File, error) {
 
 	// Open the file for reading
 	fileName = filepath.Join(FS.localDir, fileName)
-	fmt.Printf("os.O_RDWR|os.O_CREATE,fileName: %x %x %x %s %x %x\n", os.O_RDWR|os.O_CREATE, os.O_RDWR, os.O_CREATE, "access", int(access), access)
 
 	file, err := os.OpenFile(fileName, int(access), 0666)
 	if err != nil {
@@ -278,8 +277,6 @@ func (FS *LocalFS) Rename(fileName, newName string) (err error) {
 
 	fileName = filepath.Join(FS.localDir, fileName)
 	newName = filepath.Join(FS.localDir, newName)
-
-	fmt.Println("oldFile:", fileName, "newFileName:", newName)
 
 	err = os.Rename(fileName, newName)
 	if err != nil {
