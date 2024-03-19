@@ -129,10 +129,11 @@ func (s *Server) Serve() {
 		conn, err := s.listener.Accept()
 		if err != nil {
 			if s.ctx.Err() != nil {
-				fmt.Println("Listener closed.")
+				s.Logger().Info("Listener closed.")
 				return
 			}
-			fmt.Println("Error accepting connection:", err)
+			s.Logger().Error("Error accepting connection", "error", err)
+
 			continue
 		}
 

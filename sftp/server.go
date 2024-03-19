@@ -94,7 +94,7 @@ func (s *Server) ListenAndServe() error {
 		// Accept incoming connections.
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Printf("Failed to accept incoming connection (%v)\n", err)
+			s.Logger().Error("Failed to accept incoming connection", "error", err)
 			continue
 		}
 
@@ -188,7 +188,7 @@ func (s *Server) sshHandler(conn net.Conn) {
 
 		channel, requests, err := newChannel.Accept()
 		if err != nil {
-			fmt.Printf("Could not accept channel (%v)\n", err)
+			s.Logger().Error("Could not accept channel", "error", err)
 			return
 		}
 
