@@ -78,7 +78,7 @@ type FSWithFile interface {
 	FS
 	// File opens the file and returns a file object
 	// fileName is the name of the file to open
-	File(fileName string, access uint32) (*os.File, error)
+	File(fileName string, access int) (*os.File, error)
 
 	// StatFS FileStatFS returns the file system status of the file system containing the file
 	StatFS(path string) (*sftp.StatVFS, error)
@@ -168,7 +168,7 @@ func (FS *LocalFS) MakeDir(folderName string) error {
 }
 
 // File reads the file at the given offset and writes it to the given writer
-func (FS *LocalFS) File(fileName string, access uint32) (*os.File, error) {
+func (FS *LocalFS) File(fileName string, access int) (*os.File, error) {
 
 	fileName, err := FS.cleanPath(fileName)
 	if err != nil {
@@ -178,7 +178,7 @@ func (FS *LocalFS) File(fileName string, access uint32) (*os.File, error) {
 	// Open the file for reading
 	fileName = filepath.Join(FS.localDir, fileName)
 
-	file, err := os.OpenFile(fileName, int(access), 0666)
+	file, err := os.OpenFile(fileName, access, 0666)
 	if err != nil {
 		return nil, fmt.Errorf("creating file error: %w", err)
 	}

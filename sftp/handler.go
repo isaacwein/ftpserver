@@ -49,13 +49,28 @@ func (s *Server) sftpHandler(channel ssh.Channel) {
 
 }
 
+type WriterAtReaderAt struct {
+	sftp.WriterAtReaderAt
+	logger *slog.Logger
+}
+
+func (wa *WriterAtReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
+	n, err = wa.WriterAtReaderAt.ReadAt(p, off)
+	if err != nil && err != io.EOF {
+		wa.logger.Error("ReadAt error", "error", err, "off", off, "n", n)
+	}
+	return n, err
+}
+
+func (wa *WriterAtReaderAt) WriteAt(p []byte, off int64) (n int, err error) {
+	at, err := wa.WriterAtReaderAt.WriteAt(p, off)
+	if err != nil && err != io.EOF {
+		wa.logger.Error("WriteAt error", "error", err, "off", off, "n", n)
+	}
+	return at, err
+}
+
 func (s *FileSys) Fileread(request *sftp.Request) (io.ReaderAt, error) {
-	return s.OpenFile(request)
-}
-func (s *FileSys) Filewrite(request *sftp.Request) (io.WriterAt, error) {
-	return s.OpenFile(request)
-}
-func (s *FileSys) OpenFile(request *sftp.Request) (sftp.WriterAtReaderAt, error) {
 
 	s.logger.Debug("FileWrite",
 		"request.Method:", request.Method,
@@ -64,15 +79,58 @@ func (s *FileSys) OpenFile(request *sftp.Request) (sftp.WriterAtReaderAt, error)
 		"request.Flags:", request.Flags,
 		"request.Target:", request.Target,
 	)
-	if request.Method == "Put" {
-		// Adjust the flags to ensure file creation
-		request.Flags |= uint32(os.O_CREATE)
-	}
-	file, err := s.fs.File(request.Filepath, request.Flags)
+	file, err := s.fs.File(request.Filepath, os.O_RDONLY)
 
 	if err != nil {
+		s.logger.Error("error opening file", "error", err)
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
+	return &WriterAtReaderAt{file, s.logger}, nil
+}
+
+func (s *FileSys) Filewrite(request *sftp.Request) (io.WriterAt, error) {
+
+	s.logger.Debug("FileWrite",
+		"request.Method:", request.Method,
+		"request.Filepath:", request.Filepath,
+		"request.Attrs:", tools.IsPrintable(request.Attrs),
+		"request.Flags:", request.Flags,
+		"request.Target:", request.Target,
+	)
+	file, err := s.fs.File(request.Filepath, os.O_WRONLY|os.O_CREATE)
+
+	if err != nil {
+		s.logger.Error("error opening file", "error", err)
+		return nil, fmt.Errorf("error opening file: %w", err)
+	}
+
+	return &WriterAtReaderAt{file, s.logger}, nil
+}
+func (s *FileSys) OpenFile(request *sftp.Request) (sftp.WriterAtReaderAt, error) {
+
+	flags := int(request.Flags)
+	switch request.Method {
+	case "Get":
+		flags = os.O_RDONLY
+	case "Put":
+		// Adjust the flags to ensure file creation
+		flags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
+	}
+	s.logger.Debug("FileWrite",
+		"request.Method:", request.Method,
+		"request.Filepath:", request.Filepath,
+		"request.Attrs:", tools.IsPrintable(request.Attrs),
+		"request.Flags:", request.Flags,
+		"newFlags:", flags,
+		"request.Target:", request.Target,
+	)
+	file, err := s.fs.File(request.Filepath, flags)
+
+	if err != nil {
+		s.logger.Error("error opening file", "error", err)
+		return nil, fmt.Errorf("error opening file: %w", err)
+	}
+
 	return file, nil
 }
 func (s *FileSys) Filecmd(request *sftp.Request) error {
@@ -157,6 +215,7 @@ type ListerAt []os.FileInfo
 
 // ListAt Modeled after strings.Reader's ReadAt() implementation
 func (f ListerAt) ListAt(ls []os.FileInfo, offset int64) (int, error) {
+
 	var n int
 	if offset >= int64(len(f)) {
 		return 0, io.EOF
@@ -176,27 +235,35 @@ func (s *FileSys) Filelist(request *sftp.Request) (sftp.ListerAt, error) {
 		"request.Flags:", request.Flags,
 		"request.Target:", request.Target,
 	)
+
+	var entry fs.FileInfo
 	var entries []os.FileInfo
 	var err error
+
 	switch request.Method {
 	case "List":
 		_, entries, err = s.fs.Dir(request.Filepath)
 		if err != nil {
-			return nil, fmt.Errorf("fileList error: %w", err)
+			s.logger.Error("Filelist error", "error", err)
+			err = fmt.Errorf("fileList error: %w", err)
+			return nil, err
 		}
 	case "Stat":
-		_, entrie, err := s.fs.Stat(request.Filepath)
+		_, entry, err = s.fs.Stat(request.Filepath)
 		if err != nil {
-			return nil, fmt.Errorf("fileStat error: %w", err)
+			s.logger.Error("fileStat error", "error", err)
+			err = fmt.Errorf("fileStat error: %w", err)
+			return nil, err
 		}
-		entries = []os.FileInfo{entrie}
+		entries = []os.FileInfo{entry}
 	case "Lstat":
-		_, entrie, err := s.fs.Lstat(request.Filepath)
+		_, entry, err = s.fs.Lstat(request.Filepath)
 		if err != nil {
-			return nil, fmt.Errorf("lstat error: %w", err)
+			s.logger.Error("lstat error", "error", err)
+			err = fmt.Errorf("lstat error: %w", err)
+			return nil, err
 		}
-		entries = []os.FileInfo{entrie}
-
+		entries = []os.FileInfo{entry}
 	}
 
 	return ListerAt(entries), nil
