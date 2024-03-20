@@ -17,6 +17,12 @@ import (
 	"time"
 )
 
+// Users is the interface to find a user by username and password and return it
+type Users interface {
+	// VerifyUser returns a user by JWT, if the user is not found it returns an error
+	VerifyUser(request *http.Request) (any, error)
+}
+
 // FileServer is a httphandler handler to serve filesystem files
 type FileServer struct {
 
@@ -25,6 +31,7 @@ type FileServer struct {
 	localDirFS filesystem.NewFS
 	mux        *http.ServeMux
 	logger     *slog.Logger
+	users      Users
 }
 
 func (s *FileServer) SetLogger(l *slog.Logger) {
@@ -45,9 +52,14 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		protocol = "http://"
 	} else {
 		protocol = "https://"
-
 	}
-
+	if s.users == nil {
+		_, err := s.users.VerifyUser(r)
+		if err != nil {
+			http.Error(w, "Unauthorized! "+err.Error(), http.StatusUnauthorized)
+			return
+		}
+	}
 	s.Logger().Debug("ServeHTTP", "method", r.Method, "url", protocol+r.Host+r.URL.String(), "remote", r.RemoteAddr, "user-agent", r.UserAgent())
 
 	lw := tools.NewHttpResponseWriter(w, s.Logger())
@@ -158,7 +170,7 @@ func (s *FileServer) Option(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewFileServerHandler creates a new httphandler handler to serve filesystem files
-func NewFileServerHandler(pattern string, localDirFS filesystem.NewFS) http.Handler {
+func NewFileServerHandler(pattern string, localDirFS filesystem.NewFS, users Users) http.Handler {
 
 	pattern = strings.TrimSuffix(path.Clean(pattern), "/") + "/"
 
@@ -167,6 +179,7 @@ func NewFileServerHandler(pattern string, localDirFS filesystem.NewFS) http.Hand
 		virtualDir: pattern,
 		localDirFS: localDirFS,
 		mux:        http.NewServeMux(),
+		users:      users,
 	}
 
 	s.mux.HandleFunc("GET "+s.virtualDir+"{$}", s.Get)

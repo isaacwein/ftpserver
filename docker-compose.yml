@@ -8,6 +8,7 @@ services:
     image: hub.deploy.telebroad.com/fileserver:latest
     ports:
       - "8080:80" # host:container
+      - "8443:443"
       - "21:21"
       - "990:990"
       - "30000-30099:30000-30099"
@@ -23,7 +24,7 @@ services:
       FTP_DEFAULT_USER: username
       FTP_DEFAULT_PASS: password
       FTP_DEFAULT_IP: 127.0.0.0/8
-      CRT_FILE: tls/ssl-rsa/localhost.rsa.crt
-      KEY_FILE: tls/ssl-rsa/localhost.rsa.key
+      CRT_FILE: example/tls/ssl-rsa/localhost.rsa.crt
+      KEY_FILE: example/tls/ssl-rsa/localhost.rsa.key
       LOG_LEVEL: DEBUG # DEBUG | INFO | WARNING | ERROR, from "log/slog".Level package
     container_name: file-server

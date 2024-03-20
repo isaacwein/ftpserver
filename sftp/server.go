@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/pkg/sftp"
 	"github.com/telebroad/fileserver/filesystem"
-	"github.com/telebroad/fileserver/ftp"
 	"github.com/telebroad/fileserver/tools"
 	"golang.org/x/crypto/ssh"
 	"io"
@@ -23,10 +22,16 @@ type Server struct {
 	sftpServer *sftp.RequestServer
 	sshServer  *ssh.ServerConn
 	listener   net.Listener
-	users      ftp.Users
+	users      Users
 }
 
-func NewSFTPServer(addr string, fs filesystem.FSWithFile, users ftp.Users) *Server {
+// Users is the interface to find a user by username and password and return it
+type Users interface {
+	// Find returns a user by username and password, if the user is not found it returns an error
+	Find(username, password, ipaddr string) (any, error)
+}
+
+func NewSFTPServer(addr string, fs filesystem.FSWithFile, users Users) *Server {
 
 	s := &Server{
 		Addr:       addr,
@@ -88,7 +93,7 @@ func (s *Server) ListenAndServe() error {
 		return err
 	}
 
-	s.Logger().Info("Listening on " + s.Addr)
+	s.Logger().Debug("Listening on " + s.Addr)
 
 	for {
 		// Accept incoming connections.
@@ -164,7 +169,7 @@ func (s *Server) sshHandler(conn net.Conn) {
 	}
 	s.sshServer = sshConn
 
-	s.Logger().Info(
+	s.Logger().Debug(
 		"New SSH connection",
 		"RemoteAddr", sshConn.RemoteAddr().String(),
 		"ClientVersion", string(sshConn.ClientVersion()),

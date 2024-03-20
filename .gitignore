@@ -1,2 +1,5 @@
 .idea/
 /static/*
+
+go.work
+go.work.sum

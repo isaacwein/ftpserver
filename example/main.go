@@ -100,19 +100,38 @@ func main() {
 		logger.Error("Error starting sftp server", "error", err)
 		return
 	}
-
+	logger.Info("SFTP server started", "port", env.SftpAddr)
 	router := http.NewServeMux()
 
-	router.Handle("/static/{$}", httphandler.NewFileServerHandler("/static", fs))
+	router.Handle("/static/{$}", httphandler.NewFileServerHandler("/static", fs, nil))
 	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "Welcome to the filesystem server")
 	})
-	server := &http.Server{
-		Addr:    os.Getenv("HTTP_SERVER_ADDR"),
-		Handler: router,
+
+	httpServer := &httphandler.Server{
+		Server: &http.Server{
+			Addr:    os.Getenv("HTTP_SERVER_ADDR"),
+			Handler: router,
+		},
 	}
-	go server.ListenAndServe()
+
+	err = httpServer.TryListenAndServe(time.Second)
+	if err != nil {
+		logger.Error("Error starting http server", "error", err)
+	}
+
+	httpsServer := &httphandler.Server{
+		Server: &http.Server{
+			Addr:    os.Getenv("HTTPS_SERVER_ADDR"),
+			Handler: router,
+		}}
+
+	err = httpsServer.TryListenAndServeTLS(env.CrtFile, env.KeyFile, time.Second)
+	if err != nil {
+		logger.Error("Error starting https server", "error", err)
+	}
+
 	// graceful shutdown
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt)
@@ -123,7 +142,8 @@ func main() {
 	sftpServer.Close()
 	ctx, cancel := context.WithTimeoutCause(context.Background(), 5*time.Second, fmt.Errorf("http server closed by signal"))
 	defer cancel()
-	server.Shutdown(ctx)
+	httpServer.Shutdown(ctx)
+	httpsServer.Shutdown(ctx)
 }
 
 func setupLogger() *slog.Logger {
@@ -161,9 +181,9 @@ func GetUsers(logger *slog.Logger) ftp.Users {
 	FtpDefaultUser := os.Getenv("FTP_DEFAULT_USER")
 	FtpDefaultPass := os.Getenv("FTP_DEFAULT_PASS")
 	FtpDefaultIp := os.Getenv("FTP_DEFAULT_IP")
-	logger.Info("FTP_DEFAULT_USER is", "username", FtpDefaultUser)
-	logger.Info("FTP_DEFAULT_PASS is", "password", FtpDefaultPass)
-	logger.Info("FTP_DEFAULT_IP is", "Allowed form origin IP", FtpDefaultIp)
+	logger.Debug("FTP_DEFAULT_USER is", "username", FtpDefaultUser)
+	logger.Debug("FTP_DEFAULT_PASS is", "password", FtpDefaultPass)
+	logger.Debug("FTP_DEFAULT_IP is", "Allowed form origin IP", FtpDefaultIp)
 	user1 := Users.Add(FtpDefaultUser, FtpDefaultPass)
 	user1.AddIP("127.0.0.0/8")
 	user1.AddIP("10.0.0.0/8")
@@ -208,24 +228,24 @@ func GetEnv(logger *slog.Logger) (env *Environment, err error) {
 	env.SftpAddr = os.Getenv("SFTP_SERVER_ADDR")
 	env.FtpServerRoot = os.Getenv("FTP_SERVER_ROOT")
 
-	logger.Info("FTP_SERVER_ADDR is", "ADDR", env.FtpAddr)
-	logger.Info("FTPS_SERVER_ADDR is", "ADDR", env.FtpsAddr)
-	logger.Info("FTP_SERVER_IPV4 is", "IP", env.FtpServerIPv4)
-	logger.Info("FTP_SERVER_ROOT is", "ROOT", env.FtpServerRoot)
+	logger.Debug("FTP_SERVER_ADDR is", "ADDR", env.FtpAddr)
+	logger.Debug("FTPS_SERVER_ADDR is", "ADDR", env.FtpsAddr)
+	logger.Debug("FTP_SERVER_IPV4 is", "IP", env.FtpServerIPv4)
+	logger.Debug("FTP_SERVER_ROOT is", "ROOT", env.FtpServerRoot)
 
 	// convert port string to int
 	env.PasvMinPort, _ = strconv.Atoi(os.Getenv("PASV_MIN_PORT"))
 
 	env.PasvMaxPort, _ = strconv.Atoi(os.Getenv("PASV_MAX_PORT"))
 
-	logger.Info("PASV_MIN_PORT is", "PORT", env.PasvMinPort)
-	logger.Info("PASV_MAX_PORT is", "PORT", env.PasvMaxPort)
+	logger.Debug("PASV_MIN_PORT is", "PORT", env.PasvMinPort)
+	logger.Debug("PASV_MAX_PORT is", "PORT", env.PasvMaxPort)
 
 	// load the crt and key files
 	env.CrtFile = os.Getenv("CRT_FILE")
-	logger.Info("CRT_FILE is ", env.CrtFile)
+	logger.Debug("CRT_FILE is ", env.CrtFile)
 	env.KeyFile = os.Getenv("KEY_FILE")
-	logger.Info("KEY_FILE is ", env.KeyFile)
+	logger.Debug("KEY_FILE is ", env.KeyFile)
 
 	return
 }

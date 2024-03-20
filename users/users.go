@@ -3,7 +3,7 @@ package users
 import (
 	"errors"
 	"fmt"
-	"github.com/telebroad/fileserver/ftp"
+
 	"net/netip"
 	"strings"
 	"sync"
@@ -91,7 +91,6 @@ func (u *User) RemoveIP(ip string) {
 }
 
 var localUserMaxID int64 = 0
-var _ ftp.Users = &LocalUsers{}
 
 type LocalUsers struct {
 	users map[string]*User
