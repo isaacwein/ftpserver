@@ -5,12 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/pkg/sftp"
-	"golang.org/x/sys/unix"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -404,54 +402,6 @@ func (FS *LocalFS) Symlink(fileName string, target string) (err error) {
 	}
 	target = filepath.Join(FS.localDir, target)
 	return os.Symlink(target, fileName)
-}
-
-// StatFS FileStatFS returns the file system status of the file system containing the file
-func (FS *LocalFS) StatFS(path string) (*sftp.StatVFS, error) {
-	var stat unix.Statfs_t
-
-	err := unix.Statfs(path, &stat)
-	if err != nil {
-		err = fmt.Errorf("error getting file system info: %w", err)
-		return nil, err
-	}
-	var sftpStatVFS *sftp.StatVFS
-
-	switch runtime.GOOS {
-	case "linux":
-		sftpStatVFS = &sftp.StatVFS{
-			Bsize:   uint64(stat.Bsize),
-			Frsize:  uint64(stat.Frsize),
-			Blocks:  stat.Blocks,
-			Bfree:   stat.Bfree,
-			Bavail:  stat.Bavail,
-			Files:   stat.Files,
-			Ffree:   stat.Ffree,
-			Favail:  stat.Ffree,         // not sure how to calculate Favail
-			Flag:    uint64(stat.Flags), // assuming POSIX?
-			Namemax: uint64(stat.Namelen),
-		}
-	case "darwin":
-
-		sftpStatVFS = &sftp.StatVFS{
-			Bsize:   uint64(stat.Bsize),
-			Frsize:  uint64(stat.Bsize), // fragment size is a linux thing; use block size here
-			Blocks:  stat.Blocks,
-			Bfree:   stat.Bfree,
-			Bavail:  stat.Bavail,
-			Files:   stat.Files,
-			Ffree:   stat.Ffree,
-			Favail:  stat.Ffree,                                              // not sure how to calculate Favail
-			Fsid:    uint64(stat.Fsid.Val[1])<<32 | uint64(stat.Fsid.Val[0]), // endianness?
-			Flag:    uint64(stat.Flags),                                      // assuming POSIX?
-			Namemax: 1024,                                                    // man 2 statfs shows: #define MAXPATHLEN      1024
-		}
-
-	default:
-		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
-	}
-
-	return sftpStatVFS, nil
 }
 
 func NewLocalFS(localDir string) *LocalFS {
