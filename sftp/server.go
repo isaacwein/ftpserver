@@ -16,7 +16,7 @@ import (
 type Server struct {
 	Addr       string
 	logger     *slog.Logger
-	fsFileRoot filesystem.FSWithFile
+	fsFileRoot filesystem.FSWithReadWriteAt
 	PrivateKey []byte
 	sshConfig  *ssh.ServerConfig
 	sftpServer *sftp.RequestServer
@@ -31,7 +31,7 @@ type Users interface {
 	Find(username, password, ipaddr string) (any, error)
 }
 
-func NewSFTPServer(addr string, fs filesystem.FSWithFile, users Users) *Server {
+func NewSFTPServer(addr string, fs filesystem.FSWithReadWriteAt, users Users) *Server {
 
 	s := &Server{
 		Addr:       addr,

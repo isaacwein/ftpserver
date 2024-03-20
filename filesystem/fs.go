@@ -71,25 +71,27 @@ type NewFS interface {
 	GetFS() fs.FS
 }
 
-// FSWithFile is the interface that wraps the basic methods for a SFTP file system
-type FSWithFile interface {
+// FSWithReadWriteAt is the interface that wraps the basic methods for a SFTP file system
+type FSWithReadWriteAt interface {
 	FS
-	// File opens the file and returns a file object
-	// fileName is the name of the file to open
-	File(fileName string, access int) (*os.File, error)
 
+	// FileWrite creates/update a new file with the given name and writes the data from the reader
+	FileWrite(fileName string, access int) (io.WriterAt, error)
+
+	// FileRead reads the file at the given offset and writes it to the given writer
+	FileRead(fileName string, access int) (io.ReaderAt, error)
 	// StatFS FileStatFS returns the file system status of the file system containing the file
 	StatFS(path string) (*sftp.StatVFS, error)
 }
 
-// NewFSWithFile implement the FSWithFile interface add support for the New 1.16 fs.FS interface
-type NewFSWithFile interface {
+// NewFSWithReadWriteAt implement the FSWithFile interface add support for the New 1.16 fs.FS interface
+type NewFSWithReadWriteAt interface {
 	NewFS
-	FSWithFile
+	FSWithReadWriteAt
 }
 
 // Ensure that LocalFS implements the FtpFS interface
-var _ NewFSWithFile = &LocalFS{}
+var _ NewFSWithReadWriteAt = &LocalFS{}
 
 // LocalFS is a local file system that implements the FtpFS interface
 type LocalFS struct {
@@ -182,6 +184,14 @@ func (FS *LocalFS) File(fileName string, access int) (*os.File, error) {
 	}
 
 	return file, nil
+}
+
+func (FS *LocalFS) FileWrite(fileName string, access int) (io.WriterAt, error) {
+	return FS.File(fileName, access)
+}
+
+func (FS *LocalFS) FileRead(fileName string, access int) (io.ReaderAt, error) {
+	return FS.File(fileName, access)
 }
 
 // ReadFile reads the file and writes it to the given writer
@@ -317,6 +327,9 @@ func (FS *LocalFS) Stat(fileName string) (string, fs.FileInfo, error) {
 
 	info, err := fs.Stat(FS.FS, fileName)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", nil, err
+		}
 		return "", nil, fmt.Errorf("error getting file info: %w", err)
 	}
 	fileType := "file"

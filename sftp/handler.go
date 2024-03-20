@@ -15,11 +15,11 @@ import (
 )
 
 type FileSys struct {
-	fs     filesystem.FSWithFile
+	fs     filesystem.FSWithReadWriteAt
 	logger *slog.Logger
 }
 
-func NewFileSys(FS filesystem.FSWithFile, logger *slog.Logger) sftp.Handlers {
+func NewFileSys(FS filesystem.FSWithReadWriteAt, logger *slog.Logger) sftp.Handlers {
 
 	v := &FileSys{
 		logger: logger,
@@ -49,21 +49,27 @@ func (s *Server) sftpHandler(channel ssh.Channel) {
 
 }
 
-type WriterAtReaderAt struct {
-	sftp.WriterAtReaderAt
+type ReaderAt struct {
+	io.ReaderAt
+
 	logger *slog.Logger
 }
 
-func (wa *WriterAtReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
-	n, err = wa.WriterAtReaderAt.ReadAt(p, off)
+func (wa *ReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
+	n, err = wa.ReaderAt.ReadAt(p, off)
 	if err != nil && err != io.EOF {
 		wa.logger.Error("ReadAt error", "error", err, "off", off, "n", n)
 	}
 	return n, err
 }
 
-func (wa *WriterAtReaderAt) WriteAt(p []byte, off int64) (n int, err error) {
-	at, err := wa.WriterAtReaderAt.WriteAt(p, off)
+type WriterAt struct {
+	io.WriterAt
+	logger *slog.Logger
+}
+
+func (wa *WriterAt) WriteAt(p []byte, off int64) (n int, err error) {
+	at, err := wa.WriterAt.WriteAt(p, off)
 	if err != nil && err != io.EOF {
 		wa.logger.Error("WriteAt error", "error", err, "off", off, "n", n)
 	}
@@ -79,13 +85,13 @@ func (s *FileSys) Fileread(request *sftp.Request) (io.ReaderAt, error) {
 		"request.Flags:", request.Flags,
 		"request.Target:", request.Target,
 	)
-	file, err := s.fs.File(request.Filepath, os.O_RDONLY)
+	file, err := s.fs.FileRead(request.Filepath, os.O_RDONLY)
 
 	if err != nil {
 		s.logger.Error("error opening file", "error", err)
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
-	return &WriterAtReaderAt{file, s.logger}, nil
+	return &ReaderAt{file, s.logger}, nil
 }
 
 func (s *FileSys) Filewrite(request *sftp.Request) (io.WriterAt, error) {
@@ -97,42 +103,27 @@ func (s *FileSys) Filewrite(request *sftp.Request) (io.WriterAt, error) {
 		"request.Flags:", request.Flags,
 		"request.Target:", request.Target,
 	)
-	file, err := s.fs.File(request.Filepath, os.O_WRONLY|os.O_CREATE)
+
+	defer func() {
+		_, stat, err := s.fs.Stat(request.Filepath)
+		if err != nil {
+			s.logger.Error("error getting file info of the current file writing now", "error", err)
+			return
+		}
+
+		s.logger.Debug("file permissions set on creation", "file", request.Filepath, "permissions", stat.Mode())
+	}()
+
+	file, err := s.fs.FileWrite(request.Filepath, os.O_RDWR|os.O_CREATE|os.O_TRUNC)
 
 	if err != nil {
 		s.logger.Error("error opening file", "error", err)
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
 
-	return &WriterAtReaderAt{file, s.logger}, nil
+	return &WriterAt{file, s.logger}, nil
 }
-func (s *FileSys) OpenFile(request *sftp.Request) (sftp.WriterAtReaderAt, error) {
 
-	flags := int(request.Flags)
-	switch request.Method {
-	case "Get":
-		flags = os.O_RDONLY
-	case "Put":
-		// Adjust the flags to ensure file creation
-		flags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
-	}
-	s.logger.Debug("FileWrite",
-		"request.Method:", request.Method,
-		"request.Filepath:", request.Filepath,
-		"request.Attrs:", tools.IsPrintable(request.Attrs),
-		"request.Flags:", request.Flags,
-		"newFlags:", flags,
-		"request.Target:", request.Target,
-	)
-	file, err := s.fs.File(request.Filepath, flags)
-
-	if err != nil {
-		s.logger.Error("error opening file", "error", err)
-		return nil, fmt.Errorf("error opening file: %w", err)
-	}
-
-	return file, nil
-}
 func (s *FileSys) Filecmd(request *sftp.Request) error {
 	s.logger.Debug("Filecmd",
 		"request.Method:", request.Method,
