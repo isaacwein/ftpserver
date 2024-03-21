@@ -75,11 +75,9 @@ type NewFS interface {
 type FSWithReadWriteAt interface {
 	FS
 
-	// FileWrite creates/update a new file with the given name and writes the data from the reader
-	FileWrite(fileName string, access int) (io.WriterAt, error)
+	// File creates/update a new file with the given name and writes the data from the reader
+	File(fileName string, access int) (*os.File, error)
 
-	// FileRead reads the file at the given offset and writes it to the given writer
-	FileRead(fileName string, access int) (io.ReaderAt, error)
 	// StatFS FileStatFS returns the file system status of the file system containing the file
 	StatFS(path string) (*sftp.StatVFS, error)
 }
@@ -184,14 +182,6 @@ func (FS *LocalFS) File(fileName string, access int) (*os.File, error) {
 	}
 
 	return file, nil
-}
-
-func (FS *LocalFS) FileWrite(fileName string, access int) (io.WriterAt, error) {
-	return FS.File(fileName, access)
-}
-
-func (FS *LocalFS) FileRead(fileName string, access int) (io.ReaderAt, error) {
-	return FS.File(fileName, access)
 }
 
 // ReadFile reads the file and writes it to the given writer

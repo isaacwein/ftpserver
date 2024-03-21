@@ -50,30 +50,16 @@ func (s *Server) sftpHandler(channel ssh.Channel) {
 }
 
 type ReaderAt struct {
-	io.ReaderAt
-
+	*os.File
 	logger *slog.Logger
 }
 
 func (wa *ReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
-	n, err = wa.ReaderAt.ReadAt(p, off)
+	n, err = wa.File.ReadAt(p, off)
 	if err != nil && err != io.EOF {
 		wa.logger.Error("ReadAt error", "error", err, "off", off, "n", n)
 	}
 	return n, err
-}
-
-type WriterAt struct {
-	io.WriterAt
-	logger *slog.Logger
-}
-
-func (wa *WriterAt) WriteAt(p []byte, off int64) (n int, err error) {
-	at, err := wa.WriterAt.WriteAt(p, off)
-	if err != nil && err != io.EOF {
-		wa.logger.Error("WriteAt error", "error", err, "off", off, "n", n)
-	}
-	return at, err
 }
 
 func (s *FileSys) Fileread(request *sftp.Request) (io.ReaderAt, error) {
@@ -85,13 +71,26 @@ func (s *FileSys) Fileread(request *sftp.Request) (io.ReaderAt, error) {
 		"request.Flags:", request.Flags,
 		"request.Target:", request.Target,
 	)
-	file, err := s.fs.FileRead(request.Filepath, os.O_RDONLY)
+	file, err := s.fs.File(request.Filepath, os.O_RDONLY)
 
 	if err != nil {
 		s.logger.Error("error opening file", "error", err)
 		return nil, fmt.Errorf("error opening file: %w", err)
 	}
 	return &ReaderAt{file, s.logger}, nil
+}
+
+type WriterAt struct {
+	*os.File
+	logger *slog.Logger
+}
+
+func (wa *WriterAt) WriteAt(p []byte, off int64) (n int, err error) {
+	at, err := wa.File.WriteAt(p, off)
+	if err != nil && err != io.EOF {
+		wa.logger.Error("WriteAt error", "error", err, "off", off, "n", n)
+	}
+	return at, err
 }
 
 func (s *FileSys) Filewrite(request *sftp.Request) (io.WriterAt, error) {
@@ -114,7 +113,7 @@ func (s *FileSys) Filewrite(request *sftp.Request) (io.WriterAt, error) {
 		s.logger.Debug("file permissions set on creation", "file", request.Filepath, "permissions", stat.Mode())
 	}()
 
-	file, err := s.fs.FileWrite(request.Filepath, os.O_RDWR|os.O_CREATE|os.O_TRUNC)
+	file, err := s.fs.File(request.Filepath, os.O_RDWR|os.O_CREATE|os.O_TRUNC)
 
 	if err != nil {
 		s.logger.Error("error opening file", "error", err)
