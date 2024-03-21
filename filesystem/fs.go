@@ -183,7 +183,6 @@ func (FS *LocalFS) File(fileName string, access int) (*os.File, error) {
 		return nil, fmt.Errorf("creating file error: %w", err)
 	}
 	// Set the file permissions to 0777
-	file.Chmod(0777)
 	return file, nil
 }
 
