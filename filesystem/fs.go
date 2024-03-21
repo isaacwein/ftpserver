@@ -178,11 +178,12 @@ func (FS *LocalFS) File(fileName string, access int) (*os.File, error) {
 	// Open the file for reading
 	fileName = filepath.Join(FS.localDir, fileName)
 
-	file, err := os.OpenFile(fileName, access, 0666)
+	file, err := os.OpenFile(fileName, access, 0777)
 	if err != nil {
 		return nil, fmt.Errorf("creating file error: %w", err)
 	}
-
+	// Set the file permissions to 0777
+	file.Chmod(0777)
 	return file, nil
 }
 
