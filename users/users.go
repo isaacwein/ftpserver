@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -115,8 +116,8 @@ func (u *LocalUsers) Get(username string) (*User, error) {
 	return user, nil
 }
 
-// Find returns a user by username and password, if the user is not found it returns an error
-func (u *LocalUsers) Find(username, password, ipaddr string) (any, error) {
+// FindUser returns a user by username and password, if the user is not found it returns an error
+func (u *LocalUsers) FindUser(ctx context.Context, username, password, ipaddr string) (any, error) {
 	userInfo, err := u.Get(username)
 	if err != nil {
 		return nil, err

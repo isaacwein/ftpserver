@@ -20,8 +20,8 @@ const (
 
 // Users is the interface to find a user by username and password and return it
 type Users interface {
-	// Find returns a user by username and password, if the user is not found it returns an error
-	Find(username, password, ipaddr string) (any, error)
+	// FindUser returns a user by username and password, if the user is not found it returns an error
+	FindUser(ctx context.Context, username, password, ipaddr string) (any, error)
 }
 
 type Server struct {

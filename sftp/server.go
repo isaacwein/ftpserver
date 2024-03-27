@@ -1,6 +1,8 @@
 package sftp
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/pkg/sftp"
 	"github.com/telebroad/fileserver/filesystem"
@@ -10,25 +12,32 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"sync"
 	"time"
 )
 
+type sshServerConnCTX struct {
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+	conn   ssh.Conn
+}
+
 type Server struct {
-	Addr       string
-	logger     *slog.Logger
-	fsFileRoot filesystem.FSWithReadWriteAt
-	PrivateKey []byte
-	sshConfig  *ssh.ServerConfig
-	sftpServer *sftp.RequestServer
-	sshServer  *ssh.ServerConn
-	listener   net.Listener
-	users      Users
+	Addr          string
+	logger        *slog.Logger
+	fsFileRoot    filesystem.FSWithReadWriteAt
+	PrivateKey    []byte
+	sshConfig     *ssh.ServerConfig
+	sftpServer    *sftp.RequestServer
+	sshServerConn map[ssh.ConnMetadata]*sshServerConnCTX
+	listener      net.Listener
+	users         Users
 }
 
 // Users is the interface to find a user by username and password and return it
 type Users interface {
-	// Find returns a user by username and password, if the user is not found it returns an error
-	Find(username, password, ipaddr string) (any, error)
+	// FindUser returns a user by username and password, if the user is not found it returns an error
+	FindUser(ctx context.Context, username, password, ipaddr string) (any, error)
 }
 
 func NewSFTPServer(addr string, fs filesystem.FSWithReadWriteAt, users Users) *Server {
@@ -60,7 +69,7 @@ func (s *Server) SetPrivateKeyFile(pk string) error {
 }
 
 func (s *Server) ListenAndServe() error {
-
+	s.sshServerConn = make(map[ssh.ConnMetadata]*sshServerConnCTX)
 	// Generate a new key pair if not set.
 	if s.PrivateKey == nil {
 		pk, _, err := GeneratesRSAKeys(2048)
@@ -130,7 +139,17 @@ func (s *Server) TryListenAndServe(d time.Duration) (err error) {
 // Close closes the server.
 func (s *Server) Close() {
 	s.sftpServer.Close()
-	s.sshServer.Close()
+	wg := sync.WaitGroup{}
+	for conn, ctx := range s.sshServerConn {
+		wg.Add(1)
+		go func(conn ssh.ConnMetadata, ctx *sshServerConnCTX) {
+			ctx.conn.Close()
+			ctx.cancel(errors.New("server closed"))
+			delete(s.sshServerConn, conn)
+			wg.Done()
+		}(conn, ctx)
+	}
+	wg.Wait()
 	s.listener.Close()
 	return
 }
@@ -150,8 +169,11 @@ func (s *Server) Logger() *slog.Logger {
 
 // AuthHandler is called by the SSH server when a client attempts to authenticate.
 func (s *Server) AuthHandler(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
+
+	ctx, cancel := context.WithTimeoutCause(s.sshServerConn[c].ctx, 5*time.Second, fmt.Errorf("login timeout"))
+	defer cancel()
 	s.Logger().Debug("Login temp", "user", c.User())
-	if _, err := s.users.Find(c.User(), string(pass), c.RemoteAddr().String()); err == nil {
+	if _, err := s.users.FindUser(ctx, c.User(), string(pass), c.RemoteAddr().String()); err == nil {
 		return nil, nil
 	}
 
@@ -160,6 +182,8 @@ func (s *Server) AuthHandler(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions,
 
 func (s *Server) sshHandler(conn net.Conn) {
 	defer conn.Close()
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
 
 	// Upgrade the connection to an SSH connection.
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, s.sshConfig)
@@ -167,8 +191,10 @@ func (s *Server) sshHandler(conn net.Conn) {
 		s.Logger().Error("Failed to handshake", "error", err)
 		return
 	}
-	s.sshServer = sshConn
+	defer sshConn.Close()
 
+	s.sshServerConn[sshConn.Conn] = &sshServerConnCTX{ctx, cancel, sshConn}
+	defer delete(s.sshServerConn, sshConn.Conn)
 	s.Logger().Debug(
 		"New SSH connection",
 		"RemoteAddr", sshConn.RemoteAddr().String(),
