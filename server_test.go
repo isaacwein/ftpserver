@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-func main() {
+func ExampleServer() {
 
 	// setting up the slog logger
 	logger := setupLogger()
