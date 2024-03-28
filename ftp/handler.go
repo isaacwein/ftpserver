@@ -1,6 +1,7 @@
 package ftp
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/telebroad/fileserver/tools"
@@ -37,6 +38,9 @@ func (s *Server) ftpHandler(conn net.Conn) {
 	logWriter := tools.NewBufLogReadWriter(conn, s.Logger())
 
 	sessionID := generateSessionID(conn)
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+
 	session := &Session{
 		conn:            conn,
 		readWriter:      logWriter,
@@ -44,6 +48,7 @@ func (s *Server) ftpHandler(conn net.Conn) {
 		isAuthenticated: false,
 		root:            s.Root,
 		ftpServer:       s,
+		CTX:             context.WithValue(ctx, "sessionID", sessionID),
 	}
 
 	// Add the session to the manager
@@ -210,7 +215,7 @@ func (s *Session) UserCommand(cmd, arg string) (err error) {
 // PassCommand handles the PASS command from the client.
 func (s *Session) PassCommand(cmd, arg string) (err error) {
 
-	s.userInfo, err = s.ftpServer.users.Find(s.username, arg, s.conn.RemoteAddr().String())
+	s.userInfo, err = s.ftpServer.users.FindUser(s.CTX, s.username, arg, s.conn.RemoteAddr().String())
 	if err != nil {
 		fmt.Fprintf(s.readWriter, "530 Error: %s\r\n", err.Error())
 		return err

@@ -1,6 +1,7 @@
 package ftp
 
 import (
+	"context"
 	"github.com/telebroad/fileserver/tools"
 	"net"
 	"sync"
@@ -23,6 +24,7 @@ type Session struct {
 	dataListenerPortRangeEnd   int                     // data transfer connection port range
 	renamingFile               string                  // File to be renamed
 	HelpCommands               string
+	CTX                        context.Context
 }
 
 // SessionManager manages all active sessions.
