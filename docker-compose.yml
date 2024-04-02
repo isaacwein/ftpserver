@@ -7,20 +7,20 @@ services:
       dockerfile: Dockerfile
     image: hub.deploy.telebroad.com/fileserver:latest
     ports:
-      - "8080:80" # host:container
-      - "8443:443"
-      - "21:21"
-      - "990:990"
-      - "30000-30099:30000-30099"
-      - "22:22"
+      - "6080:80" # host:container
+      - "6443:443"
+      - "6021:21"
+      - "6990:990"
+      - "36000-36009:36000-36009"
+      - "6022:22"
 
     volumes:
       - ./static:/static # host:container
     environment:
       FTP_SERVER_ROOT: /static
       FTP_SERVER_IPV4: 127.0.0.1
-      PASV_MIN_PORT: 30000
-      PASV_MAX_PORT: 30009
+      PASV_MIN_PORT: 36000
+      PASV_MAX_PORT: 36009
       FTP_DEFAULT_USER: username
       FTP_DEFAULT_PASS: password
       FTP_DEFAULT_IP: 127.0.0.0/8
