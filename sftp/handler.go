@@ -2,6 +2,7 @@ package sftp
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/pkg/sftp"
@@ -14,18 +15,17 @@ import (
 	"os"
 )
 
-type FileSys struct {
-	fs     filesystem.FSWithReadWriteAt
-	logger *slog.Logger
+type Sessions struct {
+	fs       filesystem.FSWithReadWriteAt
+	logger   *slog.Logger
+	ctx      context.Context
+	cancel   context.CancelCauseFunc
+	UserInfo ssh.ConnMetadata
 }
 
-func NewFileSys(FS filesystem.FSWithReadWriteAt, logger *slog.Logger) sftp.Handlers {
+func NewFileSys(Sessions *Sessions) sftp.Handlers {
 
-	v := &FileSys{
-		logger: logger,
-		fs:     FS,
-	}
-
+	v := Sessions
 	return sftp.Handlers{
 		FileGet:  v,
 		FilePut:  v,
@@ -49,7 +49,7 @@ func (s *Server) sftpHandler(channel ssh.Channel) {
 
 }
 
-func (s *FileSys) Fileread(request *sftp.Request) (io.ReaderAt, error) {
+func (s *Sessions) Fileread(request *sftp.Request) (io.ReaderAt, error) {
 
 	s.logger.Debug("FileWrite",
 		"request.Method:", request.Method,
@@ -67,7 +67,7 @@ func (s *FileSys) Fileread(request *sftp.Request) (io.ReaderAt, error) {
 	return file, nil
 }
 
-func (s *FileSys) Filewrite(request *sftp.Request) (io.WriterAt, error) {
+func (s *Sessions) Filewrite(request *sftp.Request) (io.WriterAt, error) {
 
 	s.logger.Debug("FileWrite",
 		"request.Method:", request.Method,
@@ -87,7 +87,7 @@ func (s *FileSys) Filewrite(request *sftp.Request) (io.WriterAt, error) {
 	return file, nil
 }
 
-func (s *FileSys) Filecmd(request *sftp.Request) error {
+func (s *Sessions) Filecmd(request *sftp.Request) error {
 	s.logger.Debug("Filecmd",
 		"request.Method:", request.Method,
 		"request.Filepath:", request.Filepath,
@@ -137,7 +137,7 @@ func (s *FileSys) Filecmd(request *sftp.Request) error {
 
 	return errors.New("unsupported")
 }
-func (s *FileSys) PosixRename(request *sftp.Request) error {
+func (s *Sessions) PosixRename(request *sftp.Request) error {
 	s.logger.Debug("Filecmd",
 		"request.Method:", request.Method,
 		"request.Filepath:", request.Filepath,
@@ -153,7 +153,7 @@ func (s *FileSys) PosixRename(request *sftp.Request) error {
 	return s.fs.Rename(request.Filepath, request.Target)
 }
 
-func (s *FileSys) StatVFS(request *sftp.Request) (*sftp.StatVFS, error) {
+func (s *Sessions) StatVFS(request *sftp.Request) (*sftp.StatVFS, error) {
 	s.logger.Debug("Filecmd",
 		"request.Method:", request.Method,
 		"request.Filepath:", request.Filepath,
@@ -181,7 +181,7 @@ func (f ListerAt) ListAt(ls []os.FileInfo, offset int64) (int, error) {
 	return n, nil
 }
 
-func (s *FileSys) Filelist(request *sftp.Request) (sftp.ListerAt, error) {
+func (s *Sessions) Filelist(request *sftp.Request) (sftp.ListerAt, error) {
 	s.logger.Debug("Filelist",
 		"request.Method:", request.Method,
 		"request.Filepath:", request.Filepath,

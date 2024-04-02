@@ -16,11 +16,6 @@ import (
 	"time"
 )
 
-type sshServerConnCTX struct {
-	ctx    context.Context
-	cancel context.CancelCauseFunc
-}
-
 type Server struct {
 	Addr             string
 	logger           *slog.Logger
@@ -28,7 +23,7 @@ type Server struct {
 	privateKey       []byte
 	privateKeySigner ssh.Signer
 	sftpServer       *sftp.RequestServer
-	sshServerConn    map[net.Conn]*sshServerConnCTX
+	sshServerConn    map[net.Conn]*Sessions
 	listener         net.Listener
 	users            Users
 }
@@ -73,7 +68,7 @@ func (s *Server) SetPrivateKeyFile(pk string) error {
 }
 
 func (s *Server) ListenAndServe() error {
-	s.sshServerConn = make(map[net.Conn]*sshServerConnCTX)
+	s.sshServerConn = make(map[net.Conn]*Sessions)
 	// Generate a new key pair if not set.
 	if s.privateKey == nil {
 		pk, _, err := GeneratesEdDSAKeys()
@@ -141,7 +136,7 @@ func (s *Server) Close() {
 	wg := sync.WaitGroup{}
 	for conn, ctx := range s.sshServerConn {
 		wg.Add(1)
-		go func(conn net.Conn, ctx *sshServerConnCTX) {
+		go func(conn net.Conn, ctx *Sessions) {
 			conn.Close()
 			ctx.cancel(errors.New("server closed"))
 			delete(s.sshServerConn, conn)
@@ -175,11 +170,14 @@ func (s *Server) AuthHandler(conn net.Conn) func(conn ssh.ConnMetadata, password
 			s.Logger().Error("Session not found", "user", m.User())
 			return nil, fmt.Errorf("session not found")
 		}
+		session.logger = session.logger.With("user", m.User())
+		session.UserInfo = m
 		ctx, cancel := context.WithTimeoutCause(session.ctx, 5*time.Second, fmt.Errorf("login timeout"))
 		defer cancel()
 		s.Logger().Debug("Login temp", "user", m.User())
 		_, err := s.users.FindUser(ctx, m.User(), string(pass), m.RemoteAddr().String())
 		if err == nil {
+			session.logger = session.logger.With("User authenticated", true)
 			return nil, nil
 		}
 
@@ -191,7 +189,9 @@ func (s *Server) sshHandler(conn net.Conn) {
 	defer conn.Close()
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
-	s.sshServerConn[conn] = &sshServerConnCTX{ctx, cancel}
+
+	session := &Sessions{ctx: ctx, cancel: cancel, logger: s.Logger(), fs: s.fsFileRoot}
+	s.sshServerConn[conn] = session
 	defer delete(s.sshServerConn, conn)
 	sshCfg := &ssh.ServerConfig{
 		PasswordCallback: s.AuthHandler(conn),
@@ -239,7 +239,7 @@ func (s *Server) sshHandler(conn net.Conn) {
 
 		serverOptions := []sftp.RequestServerOption{}
 
-		FS := NewFileSys(s.fsFileRoot, s.logger)
+		FS := NewFileSys(session)
 		s.sftpServer = sftp.NewRequestServer(channel, FS, serverOptions...)
 		//s.sftpServer, err = sftp.NewServer(channel, serverOptions...)
 
