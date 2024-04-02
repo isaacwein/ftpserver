@@ -25,7 +25,7 @@ type Server struct {
 	Addr             string
 	logger           *slog.Logger
 	fsFileRoot       filesystem.FSWithReadWriteAt
-	PrivateKey       []byte
+	privateKey       []byte
 	privateKeySigner ssh.Signer
 	sftpServer       *sftp.RequestServer
 	sshServerConn    map[net.Conn]*sshServerConnCTX
@@ -53,7 +53,7 @@ func NewSFTPServer(addr string, fs filesystem.FSWithReadWriteAt, users Users) *S
 // SetPrivateKey sets the private key for the server.
 // if not called the server will generate a new key
 func (s *Server) SetPrivateKey(pk []byte) {
-	s.PrivateKey = pk
+	s.privateKey = pk
 }
 
 func (s *Server) SetPrivateKeyFile(pk string) error {
@@ -63,23 +63,23 @@ func (s *Server) SetPrivateKeyFile(pk string) error {
 		return err
 	}
 
-	s.PrivateKey = file
+	s.privateKey = file
 	return nil
 }
 
 func (s *Server) ListenAndServe() error {
 	s.sshServerConn = make(map[net.Conn]*sshServerConnCTX)
 	// Generate a new key pair if not set.
-	if s.PrivateKey == nil {
-		pk, _, err := GeneratesRSAKeys(2048)
+	if s.privateKey == nil {
+		pk, _, err := GeneratesEdDSAKeys()
 		if err != nil {
 			return fmt.Errorf("error generating RSA keys: %w", err)
 		}
-		s.PrivateKey = pk
+		s.privateKey = pk
 	}
 
 	// Generate a new key pair for the server.
-	privateKey, err := ssh.ParsePrivateKey(s.PrivateKey)
+	privateKey, err := ssh.ParsePrivateKey(s.privateKey)
 	if err != nil {
 		s.Logger().Error("Error parsing private key", "error", err)
 		err = fmt.Errorf("error parsing private key: %w", err)
@@ -240,7 +240,7 @@ func (s *Server) sshHandler(conn net.Conn) {
 
 		if err := s.sftpServer.Serve(); err == io.EOF {
 			s.sftpServer.Close()
-			s.Logger().Info("sftp client exited session.", "user", sshConn.User())
+			s.Logger().Debug("sftp client exited session.", "user", sshConn.User())
 
 		} else if err != nil {
 			s.Logger().Error("sftp server completed with error", "error", err)
