@@ -19,19 +19,18 @@ import (
 type sshServerConnCTX struct {
 	ctx    context.Context
 	cancel context.CancelCauseFunc
-	conn   ssh.Conn
 }
 
 type Server struct {
-	Addr          string
-	logger        *slog.Logger
-	fsFileRoot    filesystem.FSWithReadWriteAt
-	PrivateKey    []byte
-	sshConfig     *ssh.ServerConfig
-	sftpServer    *sftp.RequestServer
-	sshServerConn map[ssh.ConnMetadata]*sshServerConnCTX
-	listener      net.Listener
-	users         Users
+	Addr             string
+	logger           *slog.Logger
+	fsFileRoot       filesystem.FSWithReadWriteAt
+	PrivateKey       []byte
+	privateKeySigner ssh.Signer
+	sftpServer       *sftp.RequestServer
+	sshServerConn    map[net.Conn]*sshServerConnCTX
+	listener         net.Listener
+	users            Users
 }
 
 // Users is the interface to find a user by username and password and return it
@@ -69,7 +68,7 @@ func (s *Server) SetPrivateKeyFile(pk string) error {
 }
 
 func (s *Server) ListenAndServe() error {
-	s.sshServerConn = make(map[ssh.ConnMetadata]*sshServerConnCTX)
+	s.sshServerConn = make(map[net.Conn]*sshServerConnCTX)
 	// Generate a new key pair if not set.
 	if s.PrivateKey == nil {
 		pk, _, err := GeneratesRSAKeys(2048)
@@ -77,11 +76,6 @@ func (s *Server) ListenAndServe() error {
 			return fmt.Errorf("error generating RSA keys: %w", err)
 		}
 		s.PrivateKey = pk
-	}
-
-	// Configure the SSH server settings.
-	s.sshConfig = &ssh.ServerConfig{
-		PasswordCallback: s.AuthHandler,
 	}
 
 	// Generate a new key pair for the server.
@@ -92,7 +86,7 @@ func (s *Server) ListenAndServe() error {
 		return err
 	}
 
-	s.sshConfig.AddHostKey(privateKey)
+	s.privateKeySigner = privateKey
 
 	// Start the SSH server.
 	listener, err := net.Listen("tcp", s.Addr)
@@ -142,8 +136,8 @@ func (s *Server) Close() {
 	wg := sync.WaitGroup{}
 	for conn, ctx := range s.sshServerConn {
 		wg.Add(1)
-		go func(conn ssh.ConnMetadata, ctx *sshServerConnCTX) {
-			ctx.conn.Close()
+		go func(conn net.Conn, ctx *sshServerConnCTX) {
+			conn.Close()
 			ctx.cancel(errors.New("server closed"))
 			delete(s.sshServerConn, conn)
 			wg.Done()
@@ -168,33 +162,44 @@ func (s *Server) Logger() *slog.Logger {
 }
 
 // AuthHandler is called by the SSH server when a client attempts to authenticate.
-func (s *Server) AuthHandler(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
+func (s *Server) AuthHandler(conn net.Conn) func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+	return func(m ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
 
-	ctx, cancel := context.WithTimeoutCause(s.sshServerConn[c].ctx, 5*time.Second, fmt.Errorf("login timeout"))
-	defer cancel()
-	s.Logger().Debug("Login temp", "user", c.User())
-	if _, err := s.users.FindUser(ctx, c.User(), string(pass), c.RemoteAddr().String()); err == nil {
-		return nil, nil
+		session, ok := s.sshServerConn[conn]
+		if !ok {
+			s.Logger().Error("Session not found", "user", m.User())
+			return nil, fmt.Errorf("session not found")
+		}
+		ctx, cancel := context.WithTimeoutCause(session.ctx, 5*time.Second, fmt.Errorf("login timeout"))
+		defer cancel()
+		s.Logger().Debug("Login temp", "user", m.User())
+		_, err := s.users.FindUser(ctx, m.User(), string(pass), m.RemoteAddr().String())
+		if err == nil {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("password rejected for %q", m.User())
 	}
-
-	return nil, fmt.Errorf("password rejected for %q", c.User())
 }
 
 func (s *Server) sshHandler(conn net.Conn) {
 	defer conn.Close()
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
-
+	s.sshServerConn[conn] = &sshServerConnCTX{ctx, cancel}
+	defer delete(s.sshServerConn, conn)
+	sshCfg := &ssh.ServerConfig{
+		PasswordCallback: s.AuthHandler(conn),
+	}
+	sshCfg.AddHostKey(s.privateKeySigner)
 	// Upgrade the connection to an SSH connection.
-	sshConn, chans, reqs, err := ssh.NewServerConn(conn, s.sshConfig)
+	sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshCfg)
 	if err != nil {
 		s.Logger().Error("Failed to handshake", "error", err)
 		return
 	}
 	defer sshConn.Close()
 
-	s.sshServerConn[sshConn.Conn] = &sshServerConnCTX{ctx, cancel, sshConn}
-	defer delete(s.sshServerConn, sshConn.Conn)
 	s.Logger().Debug(
 		"New SSH connection",
 		"RemoteAddr", sshConn.RemoteAddr().String(),
@@ -203,6 +208,7 @@ func (s *Server) sshHandler(conn net.Conn) {
 		"ssh-User", sshConn.User(),
 		"SessionID", tools.IsPrintable(sshConn.SessionID()),
 	)
+
 	// The incoming Request channel must be serviced.
 	go ssh.DiscardRequests(reqs)
 
