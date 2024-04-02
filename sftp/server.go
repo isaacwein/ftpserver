@@ -56,6 +56,11 @@ func (s *Server) SetPrivateKey(pk []byte) {
 	s.privateKey = pk
 }
 
+// GetPrivateKey returns the private key for the server.
+func (s *Server) GetPrivateKey() []byte {
+	return s.privateKey
+}
+
 func (s *Server) SetPrivateKeyFile(pk string) error {
 	file, err := os.ReadFile(pk)
 	if err != nil {
