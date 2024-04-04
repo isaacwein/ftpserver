@@ -1,4 +1,4 @@
-package sftp
+package keys
 
 import (
 	"fmt"
@@ -16,11 +16,7 @@ func Test_GeneratesRSAKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("RSAKeySize"+fmt.Sprintf("%d", tt.keySize), func(t *testing.T) {
-			privateKey, publicKey, err := GeneratesRSAKeys(tt.keySize)
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			privateKey, publicKey := GeneratesRSAKeys(tt.keySize)
 			t.Logf("privateKey: %s\n", string(privateKey))
 			t.Logf("publicKey: %s\n", string(publicKey))
 		})
@@ -39,11 +35,7 @@ func Test_GeneratesECDSAKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("ECDSAKeySize"+fmt.Sprintf("%d", tt.keySize), func(t *testing.T) {
-			privateKey, publicKey, err := GeneratesECDSAKeys(tt.keySize)
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			privateKey, publicKey := GeneratesECDSAKeys(tt.keySize)
 			t.Logf("privateKey: %s\n", string(privateKey))
 			t.Logf("publicKey: %s\n", string(publicKey))
 		})
@@ -51,11 +43,8 @@ func Test_GeneratesECDSAKeys(t *testing.T) {
 }
 
 func Test_GeneratesED25519Keys(t *testing.T) {
-	privateKey, publicKey, err := GeneratesED25519Keys()
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	privateKey, publicKey := GeneratesED25519Keys()
+
 	t.Logf("privateKey: %s\n", string(privateKey))
 	t.Logf("publicKey: %s\n", string(publicKey))
 }

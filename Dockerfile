@@ -15,6 +15,7 @@ COPY ./sftp ./sftp
 COPY ./users ./users
 COPY ./tools ./tools
 COPY ./example ./example
+COPY ./keys ./keys
 COPY go.mod .
 COPY go.sum .
 RUN go get -d -v ./... && go mod tidy

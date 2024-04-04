@@ -11,6 +11,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"github.com/lmittmann/tint"
 	"github.com/telebroad/fileserver/filesystem"
@@ -18,12 +19,18 @@ import (
 	"github.com/telebroad/fileserver/httphandler"
 	"github.com/telebroad/fileserver/sftp"
 	"github.com/telebroad/fileserver/users"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"time"
+)
+
+var (
+	//go:embed keys
+	keysDir embed.FS
 )
 
 func main() {
@@ -43,10 +50,10 @@ func main() {
 	u := GetUsers(logger)
 
 	// file system
-	fs := filesystem.NewLocalFS(env.FtpServerRoot)
+	localFS := filesystem.NewLocalFS(env.FtpServerRoot)
 
 	// ftp server
-	ftpServer, err := ftp.NewServer(env.FtpAddr, fs, u)
+	ftpServer, err := ftp.NewServer(env.FtpAddr, localFS, u)
 	if err != nil {
 		fmt.Println("Error starting ftp server", "error", err)
 		return
@@ -69,7 +76,7 @@ func main() {
 
 	logger.Info("FTP server started", "port", env.FtpAddr)
 
-	ftpsServer, err := ftp.NewServer(env.FtpsAddr, fs, u)
+	ftpsServer, err := ftp.NewServer(env.FtpsAddr, localFS, u)
 	err = ftpServer.SetPublicServerIPv4(env.FtpServerIPv4)
 	if err != nil {
 		logger.Error("Error setting public server ip", "error", err)
@@ -88,14 +95,22 @@ func main() {
 
 	// sftp server
 
-	sftpServer := sftp.NewSFTPServer(env.SftpAddr, fs, u)
+	sftpServer := sftp.NewSFTPServer(env.SftpAddr, localFS, u)
 
 	sftpServer.SetLogger(logger.With("module", "sftp-server"))
-	err = sftpServer.SetPrivateKeyFile(env.KeyFile)
-	if err != nil {
-		logger.Error("Error setting private key", "error", err)
-		return
-	}
+	fs.WalkDir(keysDir, "./keys", func(path string, d fs.DirEntry, err error) error {
+		file, err := fs.ReadFile(keysDir, path)
+		if err != nil {
+			return err
+		}
+		sftpServer.SetPrivateKey(file)
+		return nil
+	})
+	//err = sftpServer.SetPrivateKeyFile(env.KeyFile)
+	//if err != nil {
+	//	logger.Error("Error setting private key", "error", err)
+	//	return
+	//}
 	err = sftpServer.TryListenAndServe(time.Second)
 	if err != nil {
 		logger.Error("Error starting sftp server", "error", err)
@@ -104,7 +119,7 @@ func main() {
 	logger.Info("SFTP server started", "port", env.SftpAddr)
 	router := http.NewServeMux()
 
-	router.Handle("/static/{$}", httphandler.NewFileServerHandler("/static", fs, nil))
+	router.Handle("/static/{$}", httphandler.NewFileServerHandler("/static", localFS, nil))
 	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "Welcome to the filesystem server")

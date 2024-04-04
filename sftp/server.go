@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/pkg/sftp"
 	"github.com/telebroad/fileserver/filesystem"
+	"github.com/telebroad/fileserver/keys"
 	"github.com/telebroad/fileserver/tools"
 	"golang.org/x/crypto/ssh"
 	"io"
@@ -20,8 +21,8 @@ type Server struct {
 	Addr             string
 	logger           *slog.Logger
 	fsFileRoot       filesystem.FSWithReadWriteAt
-	privateKey       []byte
-	privateKeySigner ssh.Signer
+	privateKey       [][]byte
+	privateKeySigner []ssh.Signer
 	sftpServer       *sftp.RequestServer
 	sshServerConn    map[net.Conn]*Sessions
 	listener         net.Listener
@@ -48,11 +49,11 @@ func NewSFTPServer(addr string, fs filesystem.FSWithReadWriteAt, users Users) *S
 // SetPrivateKey sets the private key for the server.
 // if not called the server will generate a new key
 func (s *Server) SetPrivateKey(pk []byte) {
-	s.privateKey = pk
+	s.privateKey = append(s.privateKey, pk)
 }
 
-// GetPrivateKey returns the private key for the server.
-func (s *Server) GetPrivateKey() []byte {
+// GetPrivateKeys returns the private key for the server.
+func (s *Server) GetPrivateKeys() [][]byte {
 	return s.privateKey
 }
 
@@ -63,30 +64,29 @@ func (s *Server) SetPrivateKeyFile(pk string) error {
 		return err
 	}
 
-	s.privateKey = file
+	s.SetPrivateKey(file)
 	return nil
 }
 
 func (s *Server) ListenAndServe() error {
 	s.sshServerConn = make(map[net.Conn]*Sessions)
 	// Generate a new key pair if not set.
-	if s.privateKey == nil {
-		pk, _, err := GeneratesED25519Keys()
-		if err != nil {
-			return fmt.Errorf("error generating RSA keys: %w", err)
-		}
-		s.privateKey = pk
+	if len(s.privateKey) == 0 {
+		pk, _ := keys.GeneratesED25519Keys()
+		s.SetPrivateKey(pk)
 	}
-
+	s.privateKeySigner = make([]ssh.Signer, len(s.privateKey))
 	// Generate a new key pair for the server.
-	privateKey, err := ssh.ParsePrivateKey(s.privateKey)
-	if err != nil {
-		s.Logger().Error("Error parsing private key", "error", err)
-		err = fmt.Errorf("error parsing private key: %w", err)
-		return err
-	}
+	for i, key := range s.privateKey {
+		privateKey, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			s.Logger().Error("Error parsing private key", "error", err)
+			err = fmt.Errorf("error parsing private key: %w", err)
+			return err
+		}
 
-	s.privateKeySigner = privateKey
+		s.privateKeySigner[i] = privateKey
+	}
 
 	// Start the SSH server.
 	listener, err := net.Listen("tcp", s.Addr)
@@ -196,7 +196,10 @@ func (s *Server) sshHandler(conn net.Conn) {
 	sshCfg := &ssh.ServerConfig{
 		PasswordCallback: s.AuthHandler(conn),
 	}
-	sshCfg.AddHostKey(s.privateKeySigner)
+	for _, key := range s.privateKeySigner {
+		sshCfg.AddHostKey(key)
+	}
+
 	// Upgrade the connection to an SSH connection.
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshCfg)
 	if err != nil {

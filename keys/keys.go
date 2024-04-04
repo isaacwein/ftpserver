@@ -1,4 +1,4 @@
-package sftp
+package keys
 
 import (
 	"crypto/ecdsa"
@@ -8,22 +8,20 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
 )
 
 // GeneratesRSAKeys generates a new RSA key pair and returns the private and public keys in PEM format.
-func GeneratesRSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte, err error) {
+func GeneratesRSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte) {
 
 	// Safeguard: Only allow certain key sizes.
 	validBitSizes := map[int]bool{2048: true, 3072: true, 4096: true}
 	if !validBitSizes[bitSize] {
-		return nil, nil, fmt.Errorf("invalid bit size: %d", bitSize)
+		return
 	}
 
 	// Generate RSA Key with the specified bit size.
 	privateKey, err := rsa.GenerateKey(rand.Reader, bitSize)
 	if err != nil {
-		err = fmt.Errorf("error generating RSA private key: %w", err)
 		return
 	}
 
@@ -39,7 +37,6 @@ func GeneratesRSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte, err er
 	// Generate and write the public key.
 	publicKeyDER, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
-		err = fmt.Errorf("error marshaling RSA public key: %w", err)
 		return
 	}
 
@@ -50,11 +47,11 @@ func GeneratesRSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte, err er
 
 	publicKeyFile = pem.EncodeToMemory(publicKeyPEM)
 
-	return privateKeyFile, publicKeyFile, nil
+	return privateKeyFile, publicKeyFile
 }
 
 // GeneratesECDSAKeys generates a new ECDSA key pair and returns the private and public keys in PEM format.
-func GeneratesECDSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte, err error) {
+func GeneratesECDSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte) {
 	var curve elliptic.Curve
 
 	// Select curve based on bit size
@@ -68,21 +65,18 @@ func GeneratesECDSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte, err 
 	case 521:
 		curve = elliptic.P521()
 	default:
-		err = fmt.Errorf("unsupported bitsize")
 		return
 	}
 
 	// Generate an ECDSA key.
 	privateKey, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
-		err = fmt.Errorf("error generating ECDSA private key: %w", err)
 		return
 	}
 
 	// Convert the private key to PEM format.
 	privateKeyBytes, err := x509.MarshalECPrivateKey(privateKey)
 	if err != nil {
-		err = fmt.Errorf("error marshaling ECDSA private key: %w", err)
 		return
 	}
 
@@ -94,7 +88,6 @@ func GeneratesECDSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte, err 
 	// Now generate and write the public key
 	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
-		err = fmt.Errorf("error marshaling ECDSA public key: %w", err)
 		return
 	}
 
@@ -106,18 +99,16 @@ func GeneratesECDSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte, err 
 }
 
 // GeneratesED25519Keys generates a new EdDSA key pair and returns the private and public keys in PEM format.
-func GeneratesED25519Keys() (privateKeyFile, publicKeyFile []byte, err error) {
+func GeneratesED25519Keys() (privateKeyFile, publicKeyFile []byte) {
 	// Generate an Ed25519 key.
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		err = fmt.Errorf("error generating EdDSA private key: %w", err)
 		return
 	}
 
 	// Convert the private key to PEM format.
 	privateKeyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	if err != nil {
-		err = fmt.Errorf("error marshaling EdDSA private key: %w", err)
 		return
 	}
 
@@ -129,7 +120,6 @@ func GeneratesED25519Keys() (privateKeyFile, publicKeyFile []byte, err error) {
 	// Now generate and write the public key
 	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
 	if err != nil {
-		err = fmt.Errorf("error marshaling EdDSA public key: %w", err)
 		return
 	}
 
