@@ -71,7 +71,7 @@ func (s *Server) ListenAndServe() error {
 	s.sshServerConn = make(map[net.Conn]*Sessions)
 	// Generate a new key pair if not set.
 	if s.privateKey == nil {
-		pk, _, err := GeneratesEdDSAKeys()
+		pk, _, err := GeneratesED25519Keys()
 		if err != nil {
 			return fmt.Errorf("error generating RSA keys: %w", err)
 		}
@@ -246,7 +246,6 @@ func (s *Server) sshHandler(conn net.Conn) {
 		if err := s.sftpServer.Serve(); err == io.EOF {
 			s.sftpServer.Close()
 			s.Logger().Debug("sftp client exited session.", "user", sshConn.User())
-
 		} else if err != nil {
 			s.Logger().Error("sftp server completed with error", "error", err)
 		}

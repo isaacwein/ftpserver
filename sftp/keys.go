@@ -105,8 +105,8 @@ func GeneratesECDSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte, err 
 	return
 }
 
-// GeneratesEdDSAKeys generates a new EdDSA key pair and returns the private and public keys in PEM format.
-func GeneratesEdDSAKeys() (privateKeyFile, publicKeyFile []byte, err error) {
+// GeneratesED25519Keys generates a new EdDSA key pair and returns the private and public keys in PEM format.
+func GeneratesED25519Keys() (privateKeyFile, publicKeyFile []byte, err error) {
 	// Generate an Ed25519 key.
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
