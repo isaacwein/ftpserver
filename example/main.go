@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -197,16 +198,17 @@ func GetUsers(logger *slog.Logger) ftp.Users {
 	FtpDefaultUser := os.Getenv("FTP_DEFAULT_USER")
 	FtpDefaultPass := os.Getenv("FTP_DEFAULT_PASS")
 	FtpDefaultIp := os.Getenv("FTP_DEFAULT_IP")
+	FtpDefaultIps := strings.Split(FtpDefaultIp, ",")
 	logger.Debug("FTP_DEFAULT_USER is", "username", FtpDefaultUser)
 	logger.Debug("FTP_DEFAULT_PASS is", "password", FtpDefaultPass)
-	logger.Debug("FTP_DEFAULT_IP is", "Allowed form origin IP", FtpDefaultIp)
+	logger.Debug("FTP_DEFAULT_IP is", "Allowed form origin IPs", FtpDefaultIp)
 	user1 := Users.Add(FtpDefaultUser, FtpDefaultPass)
-	user1.AddIP("127.0.0.0/8")
-	user1.AddIP("10.0.0.0/8")
-	user1.AddIP("172.16.0.0/12")
-	user1.AddIP("192.168.0.0/16")
-	user1.AddIP("fd00::/8")
-	user1.AddIP("::1")
+	for _, ip := range FtpDefaultIps {
+		if ip == "" {
+			continue
+		}
+		user1.AddIP(strings.Trim(ip, " \n\r\t"))
+	}
 
 	return Users
 }
