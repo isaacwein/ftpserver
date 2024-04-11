@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"log"
 )
 
 // GeneratesRSAKeys generates a new RSA key pair and returns the private and public keys in PEM format.
@@ -22,6 +23,7 @@ func GeneratesRSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte) {
 	// Generate RSA Key with the specified bit size.
 	privateKey, err := rsa.GenerateKey(rand.Reader, bitSize)
 	if err != nil {
+		log.Fatal("GeneratesRSAKeys", bitSize, "GenerateKey error", err.Error())
 		return
 	}
 
@@ -37,6 +39,7 @@ func GeneratesRSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte) {
 	// Generate and write the public key.
 	publicKeyDER, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
+		log.Fatal("GeneratesRSAKeys", bitSize, "MarshalPKIXPublicKey error", err.Error())
 		return
 	}
 
@@ -65,18 +68,21 @@ func GeneratesECDSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte) {
 	case 521:
 		curve = elliptic.P521()
 	default:
+		log.Fatal("GeneratesECDSAKeys", bitSize, "Invalid bit size")
 		return
 	}
 
 	// Generate an ECDSA key.
 	privateKey, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
+		log.Fatal("GeneratesECDSAKeys", bitSize, "GenerateKey error", err.Error())
 		return
 	}
 
 	// Convert the private key to PEM format.
 	privateKeyBytes, err := x509.MarshalECPrivateKey(privateKey)
 	if err != nil {
+		log.Fatal("GeneratesECDSAKeys", bitSize, "MarshalECPrivateKey error", err.Error())
 		return
 	}
 
@@ -88,6 +94,7 @@ func GeneratesECDSAKeys(bitSize int) (privateKeyFile, publicKeyFile []byte) {
 	// Now generate and write the public key
 	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
+		log.Fatal("GeneratesECDSAKeys", bitSize, "MarshalPKIXPublicKey error", err.Error())
 		return
 	}
 
@@ -103,12 +110,14 @@ func GeneratesED25519Keys() (privateKeyFile, publicKeyFile []byte) {
 	// Generate an Ed25519 key.
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
+		log.Fatal("GeneratesED25519Keys", "GenerateKey error", err.Error())
 		return
 	}
 
 	// Convert the private key to PEM format.
 	privateKeyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	if err != nil {
+		log.Fatal("GeneratesED25519Keys", "MarshalPKCS8PrivateKey error", err.Error())
 		return
 	}
 
@@ -120,6 +129,7 @@ func GeneratesED25519Keys() (privateKeyFile, publicKeyFile []byte) {
 	// Now generate and write the public key
 	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
 	if err != nil {
+		log.Fatal("GeneratesED25519Keys", "MarshalPKIXPublicKey error", err.Error())
 		return
 	}
 

@@ -99,19 +99,18 @@ func main() {
 	sftpServer := sftp.NewSFTPServer(env.SftpAddr, localFS, u)
 
 	sftpServer.SetLogger(logger.With("module", "sftp-server"))
-	fs.WalkDir(keysDir, "./keys", func(path string, d fs.DirEntry, err error) error {
+	fs.WalkDir(keysDir, ".", func(path string, d fs.DirEntry, err error) error {
+		if d == nil || d.IsDir() {
+			return nil
+		}
 		file, err := fs.ReadFile(keysDir, path)
 		if err != nil {
 			return err
 		}
-		sftpServer.SetPrivateKey(file)
+		sftpServer.SetPrivateKey(path, file)
 		return nil
 	})
-	//err = sftpServer.SetPrivateKeyFile(env.KeyFile)
-	//if err != nil {
-	//	logger.Error("Error setting private key", "error", err)
-	//	return
-	//}
+
 	err = sftpServer.TryListenAndServe(time.Second)
 	if err != nil {
 		logger.Error("Error starting sftp server", "error", err)

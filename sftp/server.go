@@ -21,8 +21,8 @@ type Server struct {
 	Addr             string
 	logger           *slog.Logger
 	fsFileRoot       filesystem.FSWithReadWriteAt
-	privateKey       [][]byte
-	privateKeySigner []ssh.Signer
+	privateKey       map[string][]byte
+	privateKeySigner map[string]ssh.Signer
 	sftpServer       *sftp.RequestServer
 	sshServerConn    map[net.Conn]*Sessions
 	listener         net.Listener
@@ -48,12 +48,16 @@ func NewSFTPServer(addr string, fs filesystem.FSWithReadWriteAt, users Users) *S
 
 // SetPrivateKey sets the private key for the server.
 // if not called the server will generate a new key
-func (s *Server) SetPrivateKey(pk []byte) {
-	s.privateKey = append(s.privateKey, pk)
+func (s *Server) SetPrivateKey(name string, pk []byte) {
+	if s.privateKey == nil {
+		s.privateKey = make(map[string][]byte)
+	}
+	s.privateKey[name] = pk
+
 }
 
 // GetPrivateKeys returns the private key for the server.
-func (s *Server) GetPrivateKeys() [][]byte {
+func (s *Server) GetPrivateKeys() map[string][]byte {
 	return s.privateKey
 }
 
@@ -64,7 +68,7 @@ func (s *Server) SetPrivateKeyFile(pk string) error {
 		return err
 	}
 
-	s.SetPrivateKey(file)
+	s.SetPrivateKey(pk, file)
 	return nil
 }
 
@@ -72,16 +76,20 @@ func (s *Server) ListenAndServe() error {
 	s.sshServerConn = make(map[net.Conn]*Sessions)
 	// Generate a new key pair if not set.
 	if len(s.privateKey) == 0 {
-		pk, _ := keys.GeneratesED25519Keys()
-		s.SetPrivateKey(pk)
+		pk1, _ := keys.GeneratesED25519Keys()
+		s.SetPrivateKey("ED25519.key", pk1)
+		pk2, _ := keys.GeneratesECDSAKeys(521)
+		s.SetPrivateKey("ECDSA-512.key", pk2)
+		pk3, _ := keys.GeneratesRSAKeys(4096)
+		s.SetPrivateKey("rsa-4096.key", pk3)
 	}
-	s.privateKeySigner = make([]ssh.Signer, len(s.privateKey))
+	s.privateKeySigner = make(map[string]ssh.Signer)
 	// Generate a new key pair for the server.
 	for i, key := range s.privateKey {
 		privateKey, err := ssh.ParsePrivateKey(key)
 		if err != nil {
-			s.Logger().Error("Error parsing private key", "error", err)
-			err = fmt.Errorf("error parsing private key: %w", err)
+			s.Logger().Error("Error parsing private key", "error", err, "file", i)
+			err = fmt.Errorf("error parsing private key: %s %w", i, err)
 			return err
 		}
 
