@@ -203,7 +203,7 @@ func (s *Server) sshHandler(conn net.Conn) {
 	// Upgrade the connection to an SSH connection.
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshCfg)
 	if err == io.EOF {
-		sshConn, chans, reqs, err = ssh.NewServerConn(conn, sshCfg)
+		s.Logger().Error("client close the connection", "error", err)
 	}
 
 	if err != nil {
