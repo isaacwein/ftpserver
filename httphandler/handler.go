@@ -53,6 +53,7 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		protocol = "https://"
 	}
+
 	if s.users != nil {
 		_, err := s.users.VerifyUser(r)
 		if err != nil {

@@ -60,6 +60,7 @@ func main() {
 		return
 	}
 	ftpServer.SetLogger(logger.With("module", "ftp-server"))
+	// seting the public server ip for passive mode
 	err = ftpServer.SetPublicServerIPv4(env.FtpServerIPv4)
 	if err != nil {
 		fmt.Println("Error setting public server ip", "error", err)
@@ -69,14 +70,16 @@ func main() {
 	ftpServer.PasvMinPort = env.PasvMinPort
 	ftpServer.PasvMaxPort = env.PasvMaxPort
 
+	// starting the ftp server
+	// TLSe means that the server start with tls encryption but it can be upgraded to tls encryption
 	err = ftpServer.TryListenAndServeTLSe(env.CrtFile, env.KeyFile, time.Second)
 	if err != nil {
 		logger.Error("Error starting ftp server", "error", err)
 		return
 	}
-
 	logger.Info("FTP server started", "port", env.FtpAddr)
 
+	// ftps server
 	ftpsServer, err := ftp.NewServer(env.FtpsAddr, localFS, u)
 	err = ftpServer.SetPublicServerIPv4(env.FtpServerIPv4)
 	if err != nil {
@@ -86,6 +89,7 @@ func main() {
 	ftpsServer.SetLogger(logger.With("module", "ftps-server"))
 	ftpsServer.PasvMinPort = env.PasvMinPort
 	ftpsServer.PasvMaxPort = env.PasvMaxPort
+	// ONLY ACCEPT TLS CONNECTIONS
 	err = ftpsServer.TryListenAndServeTLS(env.CrtFile, env.KeyFile, time.Second)
 	if err != nil {
 		logger.Error("Error starting ftps server", "error", err)
@@ -95,10 +99,11 @@ func main() {
 	logger.Info("FTPS server started", "port", env.FtpsAddr)
 
 	// sftp server
-
 	sftpServer := sftp.NewSFTPServer(env.SftpAddr, localFS, u)
 
 	sftpServer.SetLogger(logger.With("module", "sftp-server"))
+	// adding a directory with private keys
+	// ecdsa, rsa, ed25519
 	fs.WalkDir(keysDir, ".", func(path string, d fs.DirEntry, err error) error {
 		if d == nil || d.IsDir() {
 			return nil
@@ -110,13 +115,15 @@ func main() {
 		sftpServer.SetPrivateKey(path, file)
 		return nil
 	})
-
+	// starting the sftp server
 	err = sftpServer.TryListenAndServe(time.Second)
 	if err != nil {
 		logger.Error("Error starting sftp server", "error", err)
 		return
 	}
 	logger.Info("SFTP server started", "port", env.SftpAddr)
+
+	// http file server support read and write and delete files
 	router := http.NewServeMux()
 
 	router.Handle("/static/{pathname...}", httphandler.NewFileServerHandler("/static/", localFS, u))
@@ -131,12 +138,12 @@ func main() {
 			Handler: router,
 		},
 	}
-
+	// try is the same of listen and serve but with a timeout if no error is returned it returns nil
 	err = httpServer.TryListenAndServe(time.Second)
 	if err != nil {
 		logger.Error("Error starting http server", "error", err)
 	}
-
+	// https server
 	httpsServer := &httphandler.Server{
 		Server: &http.Server{
 			Addr:    os.Getenv("HTTPS_SERVER_ADDR"),
@@ -148,7 +155,7 @@ func main() {
 		logger.Error("Error starting https server", "error", err)
 	}
 
-	// graceful shutdown
+	// graceful shutdown all servers
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt)
 
