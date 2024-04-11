@@ -202,7 +202,11 @@ func (s *Server) sshHandler(conn net.Conn) {
 
 	// Upgrade the connection to an SSH connection.
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshCfg)
-	if err != nil && err != io.EOF {
+	if err == io.EOF {
+		sshConn, chans, reqs, err = ssh.NewServerConn(conn, sshCfg)
+	}
+
+	if err != nil {
 		s.Logger().Error("Failed to handshake", "error", err)
 		return
 	}
