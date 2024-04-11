@@ -119,7 +119,7 @@ func main() {
 	logger.Info("SFTP server started", "port", env.SftpAddr)
 	router := http.NewServeMux()
 
-	router.Handle("/static/{$}", httphandler.NewFileServerHandler("/static", localFS, nil))
+	router.Handle("/static/{pathname...}", httphandler.NewFileServerHandler("/static/", localFS, u))
 	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "Welcome to the filesystem server")
@@ -194,7 +194,7 @@ func setupLogger() *slog.Logger {
 }
 
 // GetUsers returns a new ftp.Users with the default user
-func GetUsers(logger *slog.Logger) ftp.Users {
+func GetUsers(logger *slog.Logger) *users.LocalUsers {
 	Users := users.NewLocalUsers()
 	// load the default user
 	FtpDefaultUser := os.Getenv("FTP_DEFAULT_USER")

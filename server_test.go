@@ -104,7 +104,7 @@ func ExampleServer() {
 	logger.Info("SFTP server started", "port", env.SftpAddr)
 	router := http.NewServeMux()
 
-	router.Handle("/static/{$}", httphandler.NewFileServerHandler("/static", fs, nil))
+	router.Handle("/static/{$}", httphandler.NewFileServerHandler("/static/", fs, nil))
 	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "Welcome to the filesystem server")

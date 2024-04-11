@@ -2,8 +2,10 @@ package users
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"net/netip"
 	"strings"
@@ -132,6 +134,23 @@ func (u *LocalUsers) FindUser(ctx context.Context, username, password, ipaddr st
 		return nil, fmt.Errorf("ip origin %s is not allowed", ipaddr)
 	}
 	return userInfo, nil
+}
+
+func (u *LocalUsers) VerifyUser(r *http.Request) (any, error) {
+
+	user, pass, ok := r.BasicAuth()
+
+	if !ok {
+		// Inform the client about the required authentication scheme and provide an example
+
+		exampleUser := "exampleUser"
+		examplePass := "examplePass"
+		exampleCredentials := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", exampleUser, examplePass)))
+		errorMessage := fmt.Errorf("access denied. This resource requires Basic authentication. For example, set the Authorization header as: Authorization: Basic %s", exampleCredentials)
+		return nil, errorMessage
+	}
+	return u.FindUser(r.Context(), user, pass, r.RemoteAddr)
+
 }
 
 // Add adds a new user

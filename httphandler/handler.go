@@ -53,9 +53,10 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		protocol = "https://"
 	}
-	if s.users == nil {
+	if s.users != nil {
 		_, err := s.users.VerifyUser(r)
 		if err != nil {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
 			http.Error(w, "Unauthorized! "+err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -170,6 +171,7 @@ func (s *FileServer) Option(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewFileServerHandler creates a new httphandler handler to serve filesystem files
+// The pattern is the virtual directory to serve it will be stripped from the URL in the handler
 func NewFileServerHandler(pattern string, localDirFS filesystem.NewFS, users Users) http.Handler {
 
 	pattern = strings.TrimSuffix(path.Clean(pattern), "/") + "/"
@@ -182,12 +184,14 @@ func NewFileServerHandler(pattern string, localDirFS filesystem.NewFS, users Use
 		users:      users,
 	}
 
-	s.mux.HandleFunc("GET "+s.virtualDir+"{$}", s.Get)
-	s.mux.HandleFunc("POST "+s.virtualDir+"{$}", s.Post)
-	s.mux.HandleFunc("PUT "+s.virtualDir+"{$}", s.Put)
-	s.mux.HandleFunc("PATCH "+s.virtualDir+"{$}", s.Patch)
-	s.mux.HandleFunc("DELETE "+s.virtualDir+"{$}", s.Delete)
-	s.mux.HandleFunc("OPTIONS "+s.virtualDir+"{$}", s.Option)
-	s.mux.HandleFunc("TRACE "+s.virtualDir+"{$}", s.Option)
+	s.mux.Handle("GET /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Get)))
+	s.mux.Handle("POST /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Post)))
+	s.mux.Handle("PUT /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Put)))
+	s.mux.Handle("PATCH /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Patch)))
+	s.mux.Handle("DELETE /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Delete)))
+	s.mux.Handle("OPTIONS /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Option)))
+	s.mux.Handle("TRACE /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Option)))
+
+	//return http.StripPrefix(s.virtualDir, http.FileServerFS(s.localDirFS.GetFS()))
 	return s
 }
