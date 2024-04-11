@@ -164,9 +164,12 @@ func main() {
 
 func setupLogger() *slog.Logger {
 	logLevel := slog.LevelInfo
+	AddSource := false
 	switch os.Getenv("LOG_LEVEL") {
+
 	case "DEBUG":
 		logLevel = slog.LevelDebug
+		AddSource = true
 	case "INFO":
 		logLevel = slog.LevelInfo
 	case "WARN":
@@ -176,7 +179,7 @@ func setupLogger() *slog.Logger {
 	}
 
 	handlerOptions := &tint.Options{
-		AddSource:   true,
+		AddSource:   AddSource,
 		Level:       logLevel, // Only log messages of level INFO and above
 		ReplaceAttr: nil,
 	}
