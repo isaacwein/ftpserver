@@ -202,7 +202,7 @@ func setupLogger() *slog.Logger {
 
 // GetUsers returns a new ftp.Users with the default user
 func GetUsers(logger *slog.Logger) *users.LocalUsers {
-	Users := users.NewLocalUsers()
+	Users := users.NewLocalUsers(logger)
 	// load the default user
 	FtpDefaultUser := os.Getenv("FTP_DEFAULT_USER")
 	FtpDefaultPass := os.Getenv("FTP_DEFAULT_PASS")

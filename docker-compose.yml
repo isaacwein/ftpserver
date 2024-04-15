@@ -5,6 +5,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
+        - "windows/amd64"
+        - "windows/arm64"
     image: hub.deploy.telebroad.com/fileserver:latest
     ports:
       - "6080:80" # host:container

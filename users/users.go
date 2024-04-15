@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"net/netip"
@@ -96,8 +97,16 @@ func (u *User) RemoveIP(ip string) {
 var localUserMaxID int64 = 0
 
 type LocalUsers struct {
-	users map[string]*User
-	wg    sync.RWMutex
+	logger *slog.Logger
+	users  map[string]*User
+	wg     sync.RWMutex
+}
+
+func (u *LocalUsers) Logger() *slog.Logger {
+	if u.logger == nil {
+		u.logger = slog.Default()
+	}
+	return u.logger.With("module", "users")
 }
 
 // List returns all users
@@ -122,15 +131,18 @@ func (u *LocalUsers) Get(username string) (*User, error) {
 func (u *LocalUsers) FindUser(ctx context.Context, username, password, ipaddr string) (any, error) {
 	userInfo, err := u.Get(username)
 	if err != nil {
+		u.Logger().Debug("user not found", "user", username)
 		return nil, err
 	}
 	if userInfo.Password != password {
+		u.Logger().Debug("password is incorrect", "user", username)
 		return nil, fmt.Errorf("password is incorrect")
 	}
 	if strings.Contains(ipaddr, ":") {
 		ipaddr = strings.Split(ipaddr, ":")[0]
 	}
 	if !userInfo.FindIP(ipaddr) {
+		u.Logger().Debug("ip origin", ipaddr, "is not allowed", "user", username)
 		return nil, fmt.Errorf("ip origin %s is not allowed", ipaddr)
 	}
 	return userInfo, nil
@@ -146,7 +158,9 @@ func (u *LocalUsers) VerifyUser(r *http.Request) (any, error) {
 		exampleUser := "exampleUser"
 		examplePass := "examplePass"
 		exampleCredentials := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", exampleUser, examplePass)))
+
 		errorMessage := fmt.Errorf("access denied. This resource requires Basic authentication. For example, set the Authorization header as: Authorization: Basic %s", exampleCredentials)
+		u.Logger().Debug("access denied", "error", errorMessage, "remoteAddr", r.RemoteAddr, "user-agent", r.UserAgent())
 		return nil, errorMessage
 	}
 	return u.FindUser(r.Context(), user, pass, r.RemoteAddr)
@@ -178,8 +192,10 @@ func (u *LocalUsers) Remove(user string) *User {
 }
 
 // NewLocalUsers creates a new LocalUsers
-func NewLocalUsers() *LocalUsers {
+func NewLocalUsers(logger *slog.Logger) *LocalUsers {
 	return &LocalUsers{
-		users: make(map[string]*User),
+		logger: logger,
+		users:  make(map[string]*User),
+		wg:     sync.RWMutex{},
 	}
 }

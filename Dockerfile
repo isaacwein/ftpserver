@@ -1,11 +1,11 @@
-FROM golang
+FROM golang AS builder
 
 RUN apt-get update && \
     apt-get upgrade -y && \
     rm -rf /var/lib/apt/lists/*
-ENV FTP_SERVER_ROOT=/static
 
-WORKDIR $FTP_SERVER_ROOT
+
+
 
 WORKDIR /fileserver
 COPY ./ftp ./ftp
@@ -20,7 +20,17 @@ COPY go.mod .
 COPY go.sum .
 RUN go get -d -v ./... && go mod tidy
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o ./fileserver ./example/
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o ./fileserver ./example/
+
+FROM scratch
+
+ENV FTP_SERVER_ROOT=/static
+WORKDIR $FTP_SERVER_ROOT
+
+WORKDIR /fileserver
+COPY --from=builder /fileserver/fileserver .
+COPY --from=builder /fileserver/example/tls/ssl-rsa/localhost.rsa.crt /fileserver/example/tls/ssl-rsa/
+COPY --from=builder /fileserver/example/tls/ssl-rsa/localhost.rsa.key /fileserver/example/tls/ssl-rsa/
 
 
 ENV FTP_SERVER_IPV4=127.0.0.1
