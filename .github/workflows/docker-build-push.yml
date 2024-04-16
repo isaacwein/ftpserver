@@ -75,8 +75,8 @@ jobs:
           git tag $NEW_VERSION
           git push origin $NEW_VERSION
           
-          # Set the new version as an output variable
-          echo "::set-output name=version::$NEW_VERSION"
+          # Set the new version as an output variable using environment file
+          echo "version=$NEW_VERSION" >> $GITHUB_ENV
         id: bump_version
 
       - name: Build and push Docker image
@@ -84,8 +84,7 @@ jobs:
         with:
           context: .
           push: true
-          labels: ${{ steps.meta.outputs.labels }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.bump_version.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.bump_version.outputs.version }}-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
