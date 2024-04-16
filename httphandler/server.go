@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Server is a wrapper around http.Server that provides additional functionality.
 type Server struct {
 	*http.Server
 }
