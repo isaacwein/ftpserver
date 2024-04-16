@@ -8,9 +8,12 @@ services:
       platforms:
         - "linux/amd64"
         - "linux/arm64"
+        - "linux/arm/v7"
         - "windows/amd64"
         - "windows/arm64"
-    image: hub.deploy.telebroad.com/fileserver:latest
+        - "darwin/amd64"
+        - "darwin/arm64"
+    image: ghcr.io/telebroad/fileserver:latest
     ports:
       - "6080:80" # host:container
       - "6443:443"

@@ -126,18 +126,17 @@ func main() {
 	// http file server support read and write and delete files
 	router := http.NewServeMux()
 
-	router.Handle("/static/{pathname...}", httphandler.NewFileServerHandler("/static/", localFS, u))
-	router.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Welcome to the filesystem server")
-	})
-
+	router.Handle("/static/{pathname...}", httphandler.NewFileServerHandler("/static", localFS, u))
 	httpServer := &httphandler.Server{
 		Server: &http.Server{
 			Addr:    os.Getenv("HTTP_SERVER_ADDR"),
 			Handler: router,
 		},
 	}
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "Welcome to the filesystem server")
+	})
 	// try is the same of listen and serve but with a timeout if no error is returned it returns nil
 	err = httpServer.TryListenAndServe(time.Second)
 	if err != nil {

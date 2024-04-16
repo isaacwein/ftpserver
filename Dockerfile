@@ -1,10 +1,15 @@
-FROM golang AS builder
+# syntax=docker/dockerfile:1
+ARG GO_VERSION=1.22
+# minor version is 1.22 because of the router
+
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS builder
 
 RUN apt-get update && \
     apt-get upgrade -y && \
     rm -rf /var/lib/apt/lists/*
 
-
+ARG TARGETOS
+ARG TARGETARCH
 
 
 WORKDIR /fileserver
@@ -22,7 +27,7 @@ RUN go get -d -v ./... && go mod tidy
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o ./fileserver ./example/
 
-FROM scratch
+FROM --platform=$BUILDPLATFORM scratch
 
 ENV FTP_SERVER_ROOT=/static
 WORKDIR $FTP_SERVER_ROOT

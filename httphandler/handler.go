@@ -3,10 +3,13 @@
 package httphandler
 
 import (
+	_ "embed"
 	"fmt"
 	"github.com/telebroad/fileserver/filesystem"
 	"github.com/telebroad/fileserver/tools"
+	"html/template"
 	"io"
+	"io/fs"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -46,7 +49,7 @@ func (s *FileServer) Logger() *slog.Logger {
 
 // ServeHTTP serves the httphandler request implementing the httphandler.Handler interface
 func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
+	fmt.Println("ServeHTTP>", r.Method, r.URL.String())
 	var protocol string
 	if r.TLS == nil {
 		protocol = "http://"
@@ -84,9 +87,66 @@ func (s *FileServer) localPath(urlPath string) string {
 	return path.Join(s.localDirFS.RootDir(), relativePath)
 }
 
+var (
+	//go:embed directory.gohtml
+	directoryTemplate string
+)
+
+func generateCustomDirectoryHTML(w http.ResponseWriter, FS fs.FS, dirPath string) {
+	type FileInfo struct {
+		Name string
+		URL  string
+	}
+
+	type DirectoryData struct {
+		Path  string
+		Files []FileInfo
+	}
+
+	files, err := fs.ReadDir(FS, dirPath)
+	if err != nil {
+		http.Error(w, "Unable to read directory", http.StatusInternalServerError)
+		return
+	}
+
+	var fileInfos []FileInfo
+	for _, file := range files {
+		urlPath := strings.Replace(path.Join(dirPath, file.Name()), " ", "%20", -1)
+		if file.IsDir() {
+			urlPath += "/"
+		}
+		fileInfos = append(fileInfos, FileInfo{Name: file.Name(), URL: urlPath})
+	}
+
+	tmpl, err := template.New("directory.gohtml").Parse(directoryTemplate)
+	if err != nil {
+		http.Error(w, "Error loading template", http.StatusInternalServerError)
+		return
+	}
+
+	data := DirectoryData{
+		Path:  dirPath,
+		Files: fileInfos,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	tmpl.Execute(w, data)
+}
+
 // Get the file from the localDir directory
 func (s *FileServer) Get(w http.ResponseWriter, r *http.Request) {
+	//p := s.localPath(r.URL.Path)
+	//p = strings.TrimPrefix(p, "/")
+	//if p == "" {
+	//	p = "."
+	//}
+	//stat, _ := fs.Stat(s.localDirFS.GetFS(), p)
+	//
+	//if stat != nil && stat.IsDir() {
+	//	generateCustomDirectoryHTML(w, s.localDirFS.GetFS(), r.URL.Path)
+	//}
 	http.FileServerFS(s.localDirFS.GetFS()).ServeHTTP(w, r)
+
 }
 
 // Post the file to the localDir directory
@@ -175,24 +235,20 @@ func (s *FileServer) Option(w http.ResponseWriter, r *http.Request) {
 // The pattern is the virtual directory to serve it will be stripped from the URL in the handler
 func NewFileServerHandler(pattern string, localDirFS filesystem.NewFS, users Users) http.Handler {
 
-	pattern = strings.TrimSuffix(path.Clean(pattern), "/") + "/"
-
 	s := &FileServer{
-
-		virtualDir: pattern,
+		virtualDir: strings.TrimSuffix(path.Clean(pattern), "/") + "/",
 		localDirFS: localDirFS,
 		mux:        http.NewServeMux(),
 		users:      users,
 	}
 
-	s.mux.Handle("GET /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Get)))
-	s.mux.Handle("POST /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Post)))
-	s.mux.Handle("PUT /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Put)))
-	s.mux.Handle("PATCH /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Patch)))
-	s.mux.Handle("DELETE /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Delete)))
-	s.mux.Handle("OPTIONS /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Option)))
-	s.mux.Handle("TRACE /{pathname...}", http.StripPrefix(s.virtualDir, http.HandlerFunc(s.Option)))
+	s.mux.Handle("GET /{pathname...}", http.StripPrefix(pattern, http.HandlerFunc(s.Get)))
+	s.mux.Handle("POST /{pathname...}", http.StripPrefix(pattern, http.HandlerFunc(s.Post)))
+	s.mux.Handle("PUT /{pathname...}", http.StripPrefix(pattern, http.HandlerFunc(s.Put)))
+	s.mux.Handle("PATCH /{pathname...}", http.StripPrefix(pattern, http.HandlerFunc(s.Patch)))
+	s.mux.Handle("DELETE /{pathname...}", http.StripPrefix(pattern, http.HandlerFunc(s.Delete)))
+	s.mux.Handle("OPTIONS /{pathname...}", http.StripPrefix(pattern, http.HandlerFunc(s.Option)))
 
-	//return http.StripPrefix(s.virtualDir, http.FileServerFS(s.localDirFS.GetFS()))
+	//return http.StripPrefix(s.virtualDir, http.FileServerFS(s.localDirFS.GetFS())
 	return s
 }
