@@ -9,6 +9,7 @@ type Server struct {
 	*http.Server
 }
 
+// TryListenAndServe starts the server and returns nil if the server started successfully within d, otherwise it returns an error.
 func (s *Server) TryListenAndServe(d time.Duration) error {
 	errC := make(chan error)
 	go func() {
@@ -26,6 +27,8 @@ func (s *Server) TryListenAndServe(d time.Duration) error {
 	}
 }
 
+// TryListenAndServeTLS starts the server with the provided certFile and keyFile
+// and returns nil if the server started successfully within d, otherwise it returns an error.
 func (s *Server) TryListenAndServeTLS(certFile, keyFile string, d time.Duration) (err error) {
 	errC := make(chan error)
 
