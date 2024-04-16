@@ -85,9 +85,9 @@ jobs:
         with:
           images: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           tags: |
-            type=raw,value=${{ steps.bump_version.outputs.version }}
-            type=raw,value=${{ steps.bump_version.outputs.version }}-{{sha}}
-            type=raw,value=latest
+            type=raw,value=${{ steps.bump_version.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
+            type=raw,value=${{ steps.bump_version.outputs.version }}-{{sha}},enable=${{ github.event_name != 'pull_request' }}
+            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
