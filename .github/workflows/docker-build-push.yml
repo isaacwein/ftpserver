@@ -2,12 +2,22 @@ name: Docker Build and Push
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type (major, minor, patch)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  DEFAULT_VERSION: 0.0.0
 
 jobs:
   build-and-push:
@@ -33,38 +43,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update version based on commit messages
+      - name: Get latest tag and bump version
         run: |
-          # Get the commit messages since the last tagged commit
-          COMMIT_MESSAGES=$(git log --oneline --format=%B $(git describe --tags --abbrev=0)..HEAD)
+          # Get the latest Git tag
+          LATEST_TAG=$(git describe --tags --abbrev=0)
           
-          # Check if the commit messages contain the keyword "MINOR" or "MAJOR"
-          if echo "$COMMIT_MESSAGES" | grep -q "MINOR"; then
-            # Increment the minor version
-            NEW_VERSION=$(echo "${{ env.DEFAULT_VERSION }}" | awk -F. '{$2++; print $1"."$2"."0}')
-          elif echo "$COMMIT_MESSAGES" | grep -q "MAJOR"; then
-            # Increment the major version
-            NEW_VERSION=$(echo "${{ env.DEFAULT_VERSION }}" | awk -F. '{$1++; $2=0; $3=0; print $1"."$2"."$3}')
+          # Extract the version numbers from the latest tag
+          MAJOR=$(echo $LATEST_TAG | cut -d'.' -f1)
+          MINOR=$(echo $LATEST_TAG | cut -d'.' -f2)
+          PATCH=$(echo $LATEST_TAG | cut -d'.' -f3)
+          
+          # Determine the version bump type
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Use the manual input for version bump
+            VERSION_BUMP="${{ github.event.inputs.version_bump }}"
           else
-            # Increment the patch version (default)
-            NEW_VERSION=$(echo "${{ env.DEFAULT_VERSION }}" | awk -F. '{$3++; print $1"."$2"."$3}')
+            # Default to patch bump for push events
+            VERSION_BUMP="patch"
+          fi
+          
+          # Increment the version based on the version bump type
+          if [ "$VERSION_BUMP" == "major" ]; then
+            NEW_VERSION="$((MAJOR+1)).0.0"
+          elif [ "$VERSION_BUMP" == "minor" ]; then
+            NEW_VERSION="$MAJOR.$((MINOR+1)).0"
+          else
+            NEW_VERSION="$MAJOR.$MINOR.$((PATCH+1))"
           fi
           
           # Set the updated version as an output variable
           echo "::set-output name=version::$NEW_VERSION"
-        id: update_version
+        id: bump_version
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
+        uses: docker/metadata-action # v5.0.0
         with:
           images: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           tags: |
-            type=raw,value=v${{ steps.update_version.outputs.version }}
-            type=raw,value=v${{ steps.update_version.outputs.version }}-{{sha}}
+            type=raw,value=v${{ steps.bump_version.outputs.version }}
+            type=raw,value=v${{ steps.bump_version.outputs.version }}-{{sha}}
+            type=raw,value=latest
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
+        uses: docker/build-push-action # v5.0.0
         with:
           context: .
           push: true
