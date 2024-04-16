@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG GO_VERSION=1.22
+ARG GO_VERSION=latest
 # minor version is 1.22 because of the router
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS builder
