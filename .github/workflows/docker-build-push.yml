@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -49,7 +49,7 @@ jobs:
           LATEST_TAG=$(git describe --tags --abbrev=0)
           
           # Extract the version numbers from the latest tag
-          MAJOR=$(echo $LATEST_TAG | cut -d'.' -f1)
+          MAJOR=$(echo $LATEST_TAG | cut -d'.' -f1 | cut -d'v' -f2)
           MINOR=$(echo $LATEST_TAG | cut -d'.' -f2)
           PATCH=$(echo $LATEST_TAG | cut -d'.' -f3)
           
@@ -64,14 +64,18 @@ jobs:
           
           # Increment the version based on the version bump type
           if [ "$VERSION_BUMP" == "major" ]; then
-            NEW_VERSION="$((MAJOR+1)).0.0"
+            NEW_VERSION="v$((MAJOR+1)).0.0"
           elif [ "$VERSION_BUMP" == "minor" ]; then
-            NEW_VERSION="$MAJOR.$((MINOR+1)).0"
+            NEW_VERSION="v$MAJOR.$((MINOR+1)).0"
           else
-            NEW_VERSION="$MAJOR.$MINOR.$((PATCH+1))"
+            NEW_VERSION="v$MAJOR.$MINOR.$((PATCH+1))"
           fi
           
-          # Set the updated version as an output variable
+          # Create a new tag with the bumped version
+          git tag $NEW_VERSION
+          git push origin $NEW_VERSION
+          
+          # Set the new version as an output variable
           echo "::set-output name=version::$NEW_VERSION"
         id: bump_version
 
@@ -81,8 +85,8 @@ jobs:
         with:
           images: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           tags: |
-            type=raw,value=v${{ steps.bump_version.outputs.version }}
-            type=raw,value=v${{ steps.bump_version.outputs.version }}-{{sha}}
+            type=raw,value=${{ steps.bump_version.outputs.version }}
+            type=raw,value=${{ steps.bump_version.outputs.version }}-{{sha}}
             type=raw,value=latest
 
       - name: Build and push Docker image
