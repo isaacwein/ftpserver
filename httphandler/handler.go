@@ -135,16 +135,25 @@ func generateCustomDirectoryHTML(w http.ResponseWriter, FS fs.FS, dirPath string
 
 // Get the file from the localDir directory
 func (s *FileServer) Get(w http.ResponseWriter, r *http.Request) {
-	//p := s.localPath(r.URL.Path)
-	//p = strings.TrimPrefix(p, "/")
-	//if p == "" {
-	//	p = "."
-	//}
-	//stat, _ := fs.Stat(s.localDirFS.GetFS(), p)
-	//
-	//if stat != nil && stat.IsDir() {
-	//	generateCustomDirectoryHTML(w, s.localDirFS.GetFS(), r.URL.Path)
-	//}
+	p := s.localPath(r.URL.Path)
+	p = strings.TrimPrefix(p, "/")
+	if p == "" {
+		p = "."
+	}
+	stat, err := fs.Stat(s.localDirFS.GetFS(), p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "path `"+p+"` File not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "path `"+p+"` error: "+err.Error(), http.StatusInternalServerError)
+		return
+
+	}
+	if stat != nil && stat.IsDir() {
+		generateCustomDirectoryHTML(w, s.localDirFS.GetFS(), r.URL.Path)
+		return
+	}
 	http.FileServerFS(s.localDirFS.GetFS()).ServeHTTP(w, r)
 
 }

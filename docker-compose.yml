@@ -13,7 +13,7 @@ services:
         - "windows/arm64"
         - "darwin/amd64"
         - "darwin/arm64"
-    image: ghcr.io/telebroad/fileserver:latest
+    image: hub.deploy.telebroad.com/fileserver:latest
     ports:
       - "6080:80" # host:container
       - "6443:443"
