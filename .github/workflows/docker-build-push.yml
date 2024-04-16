@@ -79,19 +79,13 @@ jobs:
           echo "::set-output name=version::$NEW_VERSION"
         id: bump_version
 
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          tags: |
-            type=raw,value=${{ steps.bump_version.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
-            type=raw,value=${{ steps.bump_version.outputs.version }}-{{sha}},enable=${{ github.event_name != 'pull_request' }}
-            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' }}
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            type=raw,value=${{ steps.bump_version.outputs.version }},enable=${{ github.event_name != 'pull_request' }}
+            type=raw,value=${{ steps.bump_version.outputs.version }}-{{sha}},enable=${{ github.event_name != 'pull_request' }}
+            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' }}
