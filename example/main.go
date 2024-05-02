@@ -203,15 +203,20 @@ func setupLogger() *slog.Logger {
 func GetUsers(logger *slog.Logger) *users.LocalUsers {
 	Users := users.NewLocalUsers(logger)
 	// load the default user
-	FtpDefaultUser := os.Getenv("FTP_DEFAULT_USER")
-	FtpDefaultPass := os.Getenv("FTP_DEFAULT_PASS")
-	FtpDefaultIp := os.Getenv("FTP_DEFAULT_IP")
-	FtpDefaultIps := strings.Split(FtpDefaultIp, ",")
-	logger.Debug("FTP_DEFAULT_USER is", "username", FtpDefaultUser)
-	logger.Debug("FTP_DEFAULT_PASS is", "password", FtpDefaultPass)
-	logger.Debug("FTP_DEFAULT_IP is", "Allowed form origin IPs", FtpDefaultIp)
-	user1 := Users.Add(FtpDefaultUser, FtpDefaultPass)
-	for _, ip := range FtpDefaultIps {
+	DefaultUser := os.Getenv("DEFAULT_USER")
+	DefaultPass := os.Getenv("DEFAULT_PASS")
+	DefaultIp := os.Getenv("DEFAULT_IP")
+	DefaultIps := strings.Split(DefaultIp, ",")
+	logger.Debug("DEFAULT_USER is", "username", DefaultUser)
+	logger.Debug("DEFAULT_PASS is", "password", DefaultPass)
+	logger.Debug("DEFAULT_IP is", "Allowed form origin IPs", DefaultIp)
+	if DefaultUser == "" || DefaultPass == "" {
+		logger.Info("DEFAULT_USER or DEFAULT_PASS is empty, not creating default user")
+		return Users
+	}
+	user1 := Users.Add(DefaultUser, DefaultPass)
+
+	for _, ip := range DefaultIps {
 		if ip == "" {
 			continue
 		}
@@ -269,9 +274,9 @@ func GetEnv(logger *slog.Logger) (env *Environment, err error) {
 
 	// load the crt and key files
 	env.CrtFile = os.Getenv("CRT_FILE")
-	logger.Debug("CRT_FILE is ", env.CrtFile)
+	logger.Debug("CRT_FILE is ", "file", env.CrtFile)
 	env.KeyFile = os.Getenv("KEY_FILE")
-	logger.Debug("KEY_FILE is ", env.KeyFile)
+	logger.Debug("KEY_FILE is ", "file", env.KeyFile)
 
 	return
 }

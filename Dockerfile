@@ -49,6 +49,6 @@ ENV PASV_MAX_PORT=30009
 # LOG_LEVER DEBUG | INFO | WARNING | ERROR
 # from "log/slog".Level package
 ENV LOG_LEVEL=INFO
-ENV CRT_FILE=example/tls/ssl-rsa/localhost.rsa.crt
-ENV KEY_FILE=example/tls/ssl-rsa/localhost.rsa.key
+ENV CRT_FILE=/fileserver/example/tls/ssl-rsa/localhost.rsa.crt
+ENV KEY_FILE=/fileserver/example/tls/ssl-rsa/localhost.rsa.key
 ENTRYPOINT ["./fileserver"]
