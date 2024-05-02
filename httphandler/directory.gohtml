@@ -4,43 +4,154 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Directory Listing {{.Path}}</title>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"/>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: Roboto, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 400;
             font-size: 14px;
-            color: #f0f0f0;
+            color: #466963;
             margin: 0;
             padding: 20px;
+            background: #f9f9f9;
         }
-        h1 {
-            color: #0066cc;
+
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+
+            &.filled {
+                font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24
+            }
         }
-        ul {
+
+        .content {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .directory-name {
+            color: #242424;
+        }
+
+        .list {
+
             list-style-type: none;
             padding: 0;
+            display: grid;
+            grid-template-columns: min-content min-content 1fr min-content;
+            grid-gap: 3px;
+            align-items: center;
+
+            & .file {
+                color: #002366;
+                background: white;
+                margin: 5px 0;
+                padding: 10px;
+                border-radius: 5px;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                grid-column: 1/-1;
+                display: grid;
+                grid-template-columns: subgrid;
+                align-items: inherit;
+
+                &.dir {
+                    color: #5e0336;
+
+                    & .link {
+                        color: unset;
+
+                        &:active {
+                            color: #d20a77;
+                        }
+                    }
+                }
+
+                & .link {
+                    color: unset;
+
+                    &:active {
+                        color: #054dd9;
+                    }
+
+                    display: inline-grid;
+                    grid-column: 1/-2;
+                    grid-template-columns: subgrid;
+                    grid-gap: 10px;
+                    align-items: inherit;
+                    text-decoration: none;
+                    font-weight: 500;
+
+                    & .label:hover {
+                        text-decoration: underline;
+                    }
+                }
+
+                & .download {
+                    grid-column: -1;
+                    display: inline-grid;
+                    align-items: center;
+                    justify-content: center;
+                    color: #466963;
+                    text-decoration: none;
+                    font-size: 1.5em;
+                    cursor: pointer;
+                    transition: color 0.2s;
+
+                    &:hover {
+                        color: #77b6ae;
+                        font-weight: 600;
+                    }
+
+                    &:active {
+                        color: #466963;
+
+                    }
+
+                }
+            }
         }
-        li {
-            background: white;
-            margin: 5px 0;
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        a {
-            text-decoration: none;
-            color: #0066cc;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
+
+
     </style>
+    <script>
+        function addHoverClass(parent) {
+            const child = parent.querySelector('.icon');
+            child.classList.add("filled");
+        }
+
+        function removeHoverClass(parent) {
+            const child = parent.querySelector('.icon');
+            child.classList.remove("filled");
+        }
+    </script>
 </head>
 <body>
-<h1>Directory Listing for {{.Path}}</h1>
-<ul>
-    {{range .Files}}
-        <li><a href="{{.URL}}">{{.Name}}</a></li>
-    {{end}}
-</ul>
+<div class="content">
+
+
+    <h1 class="directory-name">Directory Listing for {{.Path}}</h1>
+    <ul class="list">
+        {{range $index, $item := .Files}}
+            <li class="file{{if $item.IsDir}} dir{{end}}"
+                onmouseover="addHoverClass(this)" onmouseout="removeHoverClass(this)">
+                <a class="link" href="{{$item.URL}}">
+                    {{if $item.IsDir}}
+                        <span class="icon material-symbols-outlined">folder</span>
+                    {{else}}
+                        <span class="icon material-symbols-outlined">insert_drive_file</span>
+                    {{end}}
+                    {{printf "%02d" $index}}. <span class="label">{{$item.Name}}</span>
+                </a>
+                {{if not $item.IsDir}}
+                    <a href="{{$item.URL}}" class="download" download>
+                        <span class="icon material-symbols-outlined">download</span>
+                    </a>
+                {{end}}
+            </li>
+        {{end}}
+    </ul>
+</div>
 </body>
 </html>

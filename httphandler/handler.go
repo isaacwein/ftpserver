@@ -92,10 +92,11 @@ var (
 	directoryTemplate string
 )
 
-func generateCustomDirectoryHTML(w http.ResponseWriter, FS fs.FS, dirPath string) {
+func (s *FileServer) generateCustomDirectoryHTML(w http.ResponseWriter, FS fs.FS, dirPath, displayDir string) {
 	type FileInfo struct {
-		Name string
-		URL  string
+		Name  string
+		URL   string
+		IsDir bool
 	}
 
 	type DirectoryData struct {
@@ -105,17 +106,25 @@ func generateCustomDirectoryHTML(w http.ResponseWriter, FS fs.FS, dirPath string
 
 	files, err := fs.ReadDir(FS, dirPath)
 	if err != nil {
+		s.Logger().Error("Unable to read directory", "error", err)
 		http.Error(w, "Unable to read directory", http.StatusInternalServerError)
 		return
 	}
 
 	var fileInfos []FileInfo
+	if displayDir != "/" {
+		fileInfos = append(fileInfos, FileInfo{Name: "..", URL: "../", IsDir: true})
+	}
 	for _, file := range files {
-		urlPath := strings.Replace(path.Join(dirPath, file.Name()), " ", "%20", -1)
+		urlPath := strings.Replace(file.Name(), " ", "%20", -1)
 		if file.IsDir() {
-			urlPath += "/"
+			urlPath = urlPath + "/"
 		}
-		fileInfos = append(fileInfos, FileInfo{Name: file.Name(), URL: urlPath})
+		fileInfos = append(fileInfos, FileInfo{
+			Name:  file.Name(),
+			URL:   urlPath,
+			IsDir: file.IsDir(),
+		})
 	}
 
 	tmpl, err := template.New("directory.gohtml").Parse(directoryTemplate)
@@ -125,7 +134,7 @@ func generateCustomDirectoryHTML(w http.ResponseWriter, FS fs.FS, dirPath string
 	}
 
 	data := DirectoryData{
-		Path:  dirPath,
+		Path:  displayDir,
 		Files: fileInfos,
 	}
 
@@ -151,9 +160,10 @@ func (s *FileServer) Get(w http.ResponseWriter, r *http.Request) {
 
 	}
 	if stat != nil && stat.IsDir() {
-		generateCustomDirectoryHTML(w, s.localDirFS.GetFS(), r.URL.Path)
+		s.generateCustomDirectoryHTML(w, s.localDirFS.GetFS(), p, r.URL.Path)
 		return
 	}
+
 	http.FileServerFS(s.localDirFS.GetFS()).ServeHTTP(w, r)
 
 }
