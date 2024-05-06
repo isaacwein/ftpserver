@@ -29,8 +29,8 @@ services:
       FTP_SERVER_IPV4: 127.0.0.1
       PASV_MIN_PORT: 36000
       PASV_MAX_PORT: 36009
-      DEFAULT_USER: username!#123
-      DEFAULT_PASS: password!#123
+      DEFAULT_USER: username-123
+      DEFAULT_PASS: password-123
       DEFAULT_IP: 172.16.0.0/12, 10.0.0.0/8, 192.168.0.0/16, 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fd00::/8, ::1
       CRT_FILE: /fileserver/example/tls/ssl-rsa/localhost.rsa.crt
       KEY_FILE: /fileserver/example/tls/ssl-rsa/localhost.rsa.key

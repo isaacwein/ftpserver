@@ -159,7 +159,9 @@ func (u *LocalUsers) VerifyUser(r *http.Request) (any, error) {
 		examplePass := "examplePass"
 		exampleCredentials := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", exampleUser, examplePass)))
 
-		errorMessage := fmt.Errorf("access denied. This resource requires Basic authentication. For example, set the Authorization header as: Authorization: Basic %s", exampleCredentials)
+		errorMessage := fmt.Errorf("access denied. This resource requires Basic authentication. For example, "+
+			"set the Authorization header as: Authorization: Basic %s or http://%s:%s@example.com",
+			exampleCredentials, exampleUser, examplePass)
 		u.Logger().Debug("access denied", "error", errorMessage, "remoteAddr", r.RemoteAddr, "user-agent", r.UserAgent())
 		return nil, errorMessage
 	}

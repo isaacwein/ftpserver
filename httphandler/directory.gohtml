@@ -40,7 +40,7 @@
             list-style-type: none;
             padding: 0;
             display: grid;
-            grid-template-columns: min-content min-content 1fr min-content;
+            grid-template-columns: min-content min-content 1fr min-content min-content;
             grid-gap: 3px;
             align-items: center;
 
@@ -76,7 +76,7 @@
                     }
 
                     display: inline-grid;
-                    grid-column: 1/-2;
+                    grid-column: 1/4;
                     grid-template-columns: subgrid;
                     grid-gap: 10px;
                     align-items: inherit;
@@ -89,7 +89,15 @@
                 }
 
                 & .download {
-                    grid-column: -1;
+                    grid-column: 4;
+                }
+
+                & .delete-link {
+                    grid-column: 5;
+                }
+
+                & .download, & .delete-link {
+
                     display: inline-grid;
                     align-items: center;
                     justify-content: center;
@@ -125,6 +133,42 @@
             const child = parent.querySelector('.icon');
             child.classList.remove("filled");
         }
+
+        async function deleteResource(ev) {
+            const url = ev.target.dataset.url;
+            try {
+                // Get the current URL
+                const pageURL = new URL(window.location.href);
+
+                // Extract the username and password from the URL
+                const username = pageURL.username;
+                const password = pageURL.password;
+
+                const response = await fetch(pageURL, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa(username + ':' + password)
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not OK');
+                }
+
+                console.log('Resource deleted successfully');
+                location.reload(); // Refresh the page on success
+            } catch (error) {
+                console.error('Error deleting resource:', error);
+            }
+        }
+
+
+    </script>
+    <script defer>
+        const deleteLinks = document.getElementsByClassName('delete-link');
+        Array.from(deleteLinks).forEach((button) => {
+            button.addEventListener('click', deleteResource);
+        })
     </script>
 </head>
 <body>
@@ -149,6 +193,9 @@
                         <span class="icon material-symbols-outlined">download</span>
                     </a>
                 {{end}}
+                <a href="#" class="delete-link" data-url="{{$item.URL}}">
+                    <span class="icon material-symbols-outlined">delete</span>
+                </a>
             </li>
         {{end}}
     </ul>
