@@ -135,7 +135,10 @@ func main() {
 	}
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Welcome to the filesystem server")
+		fmt.Fprintf(w, "<html><body>")
+		fmt.Fprintf(w, "<h1>Welcome to the filesystem server</h1>")
+		fmt.Fprintf(w, `<h2>file server is at <a href="/static">/static</a></h2>`)
+		fmt.Fprintf(w, "</body></html>")
 	})
 	// try is the same of listen and serve but with a timeout if no error is returned it returns nil
 	err = httpServer.TryListenAndServe(time.Second)
