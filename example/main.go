@@ -21,6 +21,7 @@ import (
 	"github.com/telebroad/fileserver/users"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
 	"os"
 	"os/signal"
@@ -125,6 +126,8 @@ func main() {
 
 	// http file server support read and write and delete files
 	router := http.NewServeMux()
+	// add mime types
+	addMimTypes()
 
 	router.Handle("/static/{pathname...}", httphandler.NewFileServerHandler("/static", localFS, u))
 	httpServer := &httphandler.Server{
@@ -282,4 +285,8 @@ func GetEnv(logger *slog.Logger) (env *Environment, err error) {
 	logger.Debug("KEY_FILE is ", "file", env.KeyFile)
 
 	return
+}
+func addMimTypes() {
+	mime.AddExtensionType(".wav", "audio/wave")
+	mime.AddExtensionType(".wav", "audio/wav")
 }
